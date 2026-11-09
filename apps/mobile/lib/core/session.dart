@@ -43,6 +43,20 @@ class SessionController extends Notifier<SessionState> {
     }
   }
 
+  /// Asks the server for the signed-in user again, for example to get the new
+  /// balance after a payment. Keeps the old data if the call fails.
+  Future<void> refreshUser() async {
+    if (state.status != SessionStatus.authenticated) return;
+    try {
+      final user = await ref.read(apiClientProvider).checkAuth();
+      if (user != null && state.status == SessionStatus.authenticated) {
+        state = SessionState(status: SessionStatus.authenticated, user: user);
+      }
+    } on ApiException {
+      // Keep what we have.
+    }
+  }
+
   /// Throws [ApiException] when the sign-in fails.
   Future<void> signIn({
     required String username,

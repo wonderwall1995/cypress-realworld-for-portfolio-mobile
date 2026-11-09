@@ -182,6 +182,58 @@ class ApiClient {
     }
   }
 
+  /// Other users, for choosing who to pay or to ask. [query] filters by name
+  /// or user name. The signed-in user is not in the list.
+  Future<List<Map<String, dynamic>>> getUsers({String? query}) async {
+    try {
+      final trimmed = query?.trim() ?? '';
+      final response = trimmed.isEmpty
+          ? await dio.get<Map<String, dynamic>>('/users')
+          : await dio.get<Map<String, dynamic>>('/users/search', queryParameters: {'q': trimmed});
+      final results = response.data?['results'] as List<dynamic>? ?? const [];
+      return results.cast<Map<String, dynamic>>();
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// Creates a payment or a request. [amount] is in whole dollars (the server
+  /// multiplies by 100). [transactionType] is `payment` or `request`.
+  Future<Map<String, dynamic>> createTransaction({
+    required String transactionType,
+    required String receiverId,
+    required String description,
+    required int amount,
+  }) async {
+    try {
+      final response = await dio.post<Map<String, dynamic>>(
+        '/transactions',
+        data: {
+          'transactionType': transactionType,
+          'receiverId': receiverId,
+          'description': description,
+          'amount': amount,
+        },
+      );
+      return response.data!['transaction'] as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// Accepts or rejects a request. [requestStatus] is `accepted` or `rejected`.
+  /// The server answers 409 when the request was already resolved.
+  Future<void> updateRequestStatus(String transactionId, String requestStatus) async {
+    try {
+      await dio.patch<Object>(
+        '/transactions/$transactionId',
+        data: {'requestStatus': requestStatus},
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   /// Signs out. The cookie on this device is removed even if the server
   /// cannot be reached.
   Future<void> logout() async {

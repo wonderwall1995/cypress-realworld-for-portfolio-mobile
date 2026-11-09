@@ -17,7 +17,7 @@ class HomeShell extends ConsumerWidget {
     (id: 'sidenav-home', label: '홈', icon: Icons.home_outlined),
     (id: 'sidenav-notifications', label: '알림', icon: Icons.notifications_outlined),
     (id: 'sidenav-bankaccounts', label: '은행 계좌', icon: Icons.account_balance_outlined),
-    (id: 'sidenav-user-settings', label: '설정', icon: Icons.settings_outlined),
+    (id: 'sidenav-my-account', label: '내 계좌', icon: Icons.account_balance_wallet_outlined),
   ];
 
   @override
@@ -30,6 +30,10 @@ class HomeShell extends ConsumerWidget {
           if (index == _tabs.length) {
             _openMoreMenu(context, ref);
             return;
+          }
+          // The balance may have changed (a request was accepted, for example).
+          if (_tabs[index].id == 'sidenav-my-account') {
+            ref.read(sessionProvider.notifier).refreshUser();
           }
           navigationShell.goBranch(
             index,
@@ -71,6 +75,17 @@ class HomeShell extends ConsumerWidget {
               ),
             ),
             const Divider(height: 1),
+            TestId(
+              'sidenav-user-settings',
+              child: ListTile(
+                leading: const Icon(Icons.settings_outlined),
+                title: const Text('설정'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  context.push('/settings');
+                },
+              ),
+            ),
             TestId(
               'sidenav-signout',
               child: ListTile(

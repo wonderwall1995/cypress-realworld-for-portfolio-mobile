@@ -41,8 +41,8 @@ void main() {
       await tapId(tester, 'sidenav-bankaccounts');
       expect(byId('bankaccount-list'), findsOneWidget);
 
-      await tapId(tester, 'sidenav-user-settings');
-      expect(find.text('설정 화면'), findsOneWidget);
+      await tapId(tester, 'sidenav-my-account');
+      expect(byId('sidenav-user-balance'), findsOneWidget);
     });
   });
 

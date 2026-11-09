@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/account/my_account_page.dart';
 import '../features/auth/signin_page.dart';
 import '../features/auth/signup_page.dart';
 import '../features/auth/splash_page.dart';
@@ -10,6 +11,7 @@ import '../features/bank_accounts/bank_accounts_page.dart';
 import '../features/onboarding/onboarding_page.dart';
 import '../features/shell/home_shell.dart';
 import '../features/shell/placeholder_page.dart';
+import '../features/transactions/create/create_transaction_page.dart';
 import '../features/transactions/transaction_detail_page.dart';
 import '../features/transactions/transactions_page.dart';
 import 'app_gate.dart';
@@ -53,6 +55,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const BankAccountNewPage(),
       ),
       GoRoute(
+        path: '/transaction/new',
+        builder: (_, __) => const CreateTransactionPage(),
+      ),
+      GoRoute(
+        path: '/settings',
+        builder: (_, __) => const PlaceholderPage(title: '설정'),
+      ),
+      GoRoute(
         path: '/transaction/:transactionId',
         builder: (_, state) =>
             TransactionDetailPage(transactionId: state.pathParameters['transactionId']!),
@@ -80,8 +90,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
-              path: '/settings',
-              builder: (_, __) => const PlaceholderPage(title: '설정'),
+              path: '/my-account',
+              builder: (_, __) => const MyAccountPage(),
             ),
           ]),
         ],

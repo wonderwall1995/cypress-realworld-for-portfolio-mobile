@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/test_id.dart';
 import 'transaction_feed_controller.dart';
 import 'transaction_list_view.dart';
 
-/// The "홈" tab: three lists (전체, 친구, 내 거래) under tabs.
+/// The "홈" tab: a "새 거래" button on the left of the tab row, then three
+/// lists (전체, 친구, 내 거래) under tabs.
 class TransactionsPage extends StatelessWidget {
   const TransactionsPage({super.key});
 
@@ -17,14 +19,33 @@ class TransactionsPage extends StatelessWidget {
           title: const Text('홈'),
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(kTextTabBarHeight),
-            child: TestId(
-              'nav-transaction-tabs',
-              child: TabBar(
-                tabs: [
-                  for (final feed in TransactionFeed.values)
-                    TestId(feed.tabId, child: Tab(text: feed.label)),
-                ],
-              ),
+            child: Row(
+              children: [
+                const SizedBox(width: 8),
+                TestId(
+                  'nav-top-new-transaction',
+                  child: FilledButton.tonalIcon(
+                    onPressed: () => context.push('/transaction/new'),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('새 거래'),
+                    style: FilledButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: TestId(
+                    'nav-transaction-tabs',
+                    child: TabBar(
+                      tabs: [
+                        for (final feed in TransactionFeed.values)
+                          TestId(feed.tabId, child: Tab(text: feed.label)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),

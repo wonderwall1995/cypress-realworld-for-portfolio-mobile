@@ -102,8 +102,21 @@ class _EmptyList extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         child: SizedBox(
           height: constraints.maxHeight,
-          child: const Center(
-            child: TestId('transaction-list-empty', child: Text('거래가 없습니다.')),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const TestId('transaction-list-empty', child: Text('거래가 없습니다.')),
+                const SizedBox(height: 16),
+                TestId(
+                  'transaction-list-empty-create-transaction-button',
+                  child: FilledButton(
+                    onPressed: () => context.push('/transaction/new'),
+                    child: const Text('거래 만들기'),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
