@@ -6,8 +6,8 @@
     "app:get": "cd apps/mobile && flutter pub get",
     "app:analyze": "cd apps/mobile && flutter analyze",
     "app:test": "cd apps/mobile && flutter test",
-    "app:run": "cd apps/mobile && flutter run",
-    "app:build:apk": "cd apps/mobile && flutter build apk --debug",
+    "app:run": "cd apps/mobile && flutter run --dart-define-from-file=../../.env",
+    "app:build:apk": "cd apps/mobile && flutter build apk --debug --dart-define-from-file=../../.env",
     "e2e": "pnpm --filter e2e test"
   }
 }
