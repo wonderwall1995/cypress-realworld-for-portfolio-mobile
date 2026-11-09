@@ -2,6 +2,7 @@ import 'package:cypress_realworld_for_personal_portfolio_mobile/app.dart';
 import 'package:cypress_realworld_for_personal_portfolio_mobile/core/providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'fake_server.dart';
@@ -18,6 +19,7 @@ Future<void> pumpApp(
   FakeServer server, {
   // A tall screen by default, so a whole form is visible.
   Size size = const Size(800, 1600),
+  List<Override> overrides = const [],
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -25,7 +27,7 @@ Future<void> pumpApp(
 
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [apiClientProvider.overrideWithValue(server.client())],
+      overrides: [apiClientProvider.overrideWithValue(server.client()), ...overrides],
       child: const App(),
     ),
   );

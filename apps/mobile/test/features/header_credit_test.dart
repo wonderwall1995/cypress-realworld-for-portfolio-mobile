@@ -1,4 +1,5 @@
 import 'package:cypress_realworld_for_personal_portfolio_mobile/core/header_credit.dart';
+import 'package:cypress_realworld_for_personal_portfolio_mobile/core/providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -38,13 +39,13 @@ void main() {
     });
   }
 
-  testWidgets('the font sizes are 7 : 3, line 2 is fainter, both are monospace', (tester) async {
+  testWidgets('the font sizes are 6 : 4, line 2 is fainter, both are monospace', (tester) async {
     await pumpApp(tester, newServer());
 
     final first = lineOf(tester, 'header-credit-copyright').style!;
     final second = lineOf(tester, 'header-credit-made-by').style!;
 
-    expect(first.fontSize! / second.fontSize!, closeTo(7 / 3, 0.001));
+    expect(first.fontSize! / second.fontSize!, closeTo(6 / 4, 0.001));
     expect(second.fontSize, lessThan(first.fontSize!));
     expect(second.color!.a, lessThan(first.color!.a));
     expect(first.fontFamily, 'monospace');
@@ -63,7 +64,76 @@ void main() {
     expect(byId('bankaccount-form'), findsOneWidget);
   });
 
-  test('the sizes in the constants keep the 7 : 3 ratio', () {
-    expect(HeaderCredit.copyrightFontSize / HeaderCredit.madeByFontSize, closeTo(7 / 3, 0.001));
+  group('the Cypress.io line is a link', () {
+    testWidgets('tapping it opens the original repository in the browser', (tester) async {
+      final opened = <Uri>[];
+      await pumpApp(tester, newServer(), overrides: [
+        urlOpenerProvider.overrideWithValue((url) async {
+          opened.add(url);
+          return true;
+        }),
+      ]);
+
+      await tester.tap(byId('header-credit-copyright'));
+      await tester.pump();
+
+      expect(opened, [Uri.parse('https://github.com/cypress-io/cypress-realworld-app')]);
+      expect(byId('alert-bar-error'), findsNothing);
+    });
+
+    testWidgets('it is underlined and marked as a link', (tester) async {
+      await pumpApp(tester, newServer());
+
+      expect(lineOf(tester, 'header-credit-copyright').style!.decoration, TextDecoration.underline);
+      expect(lineOf(tester, 'header-credit-made-by').style!.decoration, isNull);
+      final semantics = tester.getSemantics(find.descendant(of: byId('header-credit-copyright'), matching: find.byType(Text)));
+      expect(semantics.getSemanticsData().flagsCollection.isLink, isTrue);
+    });
+
+    testWidgets('when the browser cannot be opened, a pink toast says so', (tester) async {
+      await pumpApp(tester, newServer(), overrides: [
+        urlOpenerProvider.overrideWithValue((url) async => false),
+      ]);
+
+      await tester.tap(byId('header-credit-copyright'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('링크를 열 수 없습니다.'), findsOneWidget);
+      expect(byId('alert-bar-error'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+    });
+
+    testWidgets('an error from the launcher is handled the same way', (tester) async {
+      await pumpApp(tester, newServer(), overrides: [
+        urlOpenerProvider.overrideWithValue((url) async => throw Exception('no browser')),
+      ]);
+
+      await tester.tap(byId('header-credit-copyright'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(byId('alert-bar-error'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3));
+    });
+
+    testWidgets('the second line is not a link', (tester) async {
+      final opened = <Uri>[];
+      await pumpApp(tester, newServer(), overrides: [
+        urlOpenerProvider.overrideWithValue((url) async {
+          opened.add(url);
+          return true;
+        }),
+      ]);
+
+      await tester.tap(byId('header-credit-made-by'), warnIfMissed: false);
+      await tester.pump();
+
+      expect(opened, isEmpty);
+    });
+  });
+
+  test('the sizes in the constants keep the 6 : 4 ratio', () {
+    expect(HeaderCredit.copyrightFontSize / HeaderCredit.madeByFontSize, closeTo(6 / 4, 0.001));
   });
 }
