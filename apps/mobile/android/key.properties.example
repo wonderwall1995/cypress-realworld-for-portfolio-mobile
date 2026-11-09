@@ -1,0 +1,6 @@
+# Copy this file to key.properties (it is in .gitignore) and fill in your own values.
+# Never commit key.properties or the keystore file. Never write the values anywhere in git.
+storeFile=<path to your keystore file, for example C:/keys/upload-keystore.jks>
+storePassword=<keystore password>
+keyAlias=<key alias>
+keyPassword=<key password>

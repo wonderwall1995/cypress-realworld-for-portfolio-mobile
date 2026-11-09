@@ -24,3 +24,6 @@ tests/e2e/allure-results/
 
 .DS_Store
 .idea/
+
+# local notes that must not be published (privacy-related server observations)
+developing-logs-server.md
