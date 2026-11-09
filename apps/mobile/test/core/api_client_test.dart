@@ -81,6 +81,55 @@ void main() {
     });
   });
 
+  test('getBankAccounts returns the list from "results"', () async {
+    late RequestOptions seen;
+    final client = fakeClient((o) {
+      seen = o;
+      return jsonBody(200, {
+        'results': [
+          {'id': 'b1', 'bankName': 'Test Bank One'},
+        ],
+      });
+    });
+    final list = await client.getBankAccounts();
+    expect(list.single['id'], 'b1');
+    expect(seen.method, 'GET');
+    expect(seen.uri.toString(), 'http://api.test/api/bankAccounts');
+  });
+
+  test('createBankAccount posts the fields and returns the account', () async {
+    late RequestOptions seen;
+    final client = fakeClient((o) {
+      seen = o;
+      return jsonBody(200, {
+        'account': {'id': 'b9', 'bankName': 'Test Bank One'},
+      });
+    });
+    final account = await client.createBankAccount(
+      bankName: 'Test Bank One',
+      routingNumber: '123456789',
+      accountNumber: '987654321',
+    );
+    expect(account['id'], 'b9');
+    expect(seen.method, 'POST');
+    expect(seen.data, {
+      'bankName': 'Test Bank One',
+      'routingNumber': '123456789',
+      'accountNumber': '987654321',
+    });
+  });
+
+  test('deleteBankAccount calls DELETE with the id', () async {
+    late RequestOptions seen;
+    final client = fakeClient((o) {
+      seen = o;
+      return jsonBody(200, {'account': {}});
+    });
+    await client.deleteBankAccount('b1');
+    expect(seen.method, 'DELETE');
+    expect(seen.uri.toString(), 'http://api.test/api/bankAccounts/b1');
+  });
+
   test('logout removes the cookie even when the server is down', () async {
     final jar = CookieJar();
     final uri = Uri.parse('http://api.test/api/');

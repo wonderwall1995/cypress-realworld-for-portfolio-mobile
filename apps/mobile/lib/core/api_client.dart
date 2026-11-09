@@ -113,6 +113,45 @@ class ApiClient {
     }
   }
 
+  /// The signed-in user's bank accounts (deleted ones are not returned).
+  Future<List<Map<String, dynamic>>> getBankAccounts() async {
+    try {
+      final response = await dio.get<Map<String, dynamic>>('/bankAccounts');
+      final results = response.data?['results'] as List<dynamic>? ?? const [];
+      return results.cast<Map<String, dynamic>>();
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> createBankAccount({
+    required String bankName,
+    required String routingNumber,
+    required String accountNumber,
+  }) async {
+    try {
+      final response = await dio.post<Map<String, dynamic>>(
+        '/bankAccounts',
+        data: {
+          'bankName': bankName,
+          'routingNumber': routingNumber,
+          'accountNumber': accountNumber,
+        },
+      );
+      return response.data!['account'] as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  Future<void> deleteBankAccount(String id) async {
+    try {
+      await dio.delete<Object>('/bankAccounts/$id');
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   /// Signs out. The cookie on this device is removed even if the server
   /// cannot be reached.
   Future<void> logout() async {
