@@ -303,6 +303,34 @@ class ApiClient {
     }
   }
 
+  /// Saves the user's own profile. The server answers 204. [userId] must be the
+  /// signed-in user's id: the server would also accept another user's id, but
+  /// the app never sends one.
+  /// [defaultPrivacyLevel] is `public`, `contacts` or `private`.
+  Future<void> updateUser(
+    String userId, {
+    required String firstName,
+    required String lastName,
+    required String email,
+    required String phoneNumber,
+    required String defaultPrivacyLevel,
+  }) async {
+    try {
+      await dio.patch<Object>(
+        '/users/$userId',
+        data: {
+          'firstName': firstName,
+          'lastName': lastName,
+          'email': email,
+          'phoneNumber': phoneNumber,
+          'defaultPrivacyLevel': defaultPrivacyLevel,
+        },
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   /// Signs out. The cookie on this device is removed even if the server
   /// cannot be reached.
   Future<void> logout() async {

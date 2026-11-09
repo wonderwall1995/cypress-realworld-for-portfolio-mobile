@@ -329,7 +329,7 @@ void main() {
 
       await tapId(tester, 'sidenav-user-settings');
 
-      expect(find.text('설정 화면'), findsOneWidget);
+      expect(byId('user-settings-form'), findsOneWidget);
     });
   });
 }

@@ -12,8 +12,8 @@ import '../features/bank_transfers/bank_transfer_page.dart';
 import '../features/bank_accounts/bank_accounts_page.dart';
 import '../features/notifications/notifications_page.dart';
 import '../features/onboarding/onboarding_page.dart';
+import '../features/settings/settings_page.dart';
 import '../features/shell/home_shell.dart';
-import '../features/shell/placeholder_page.dart';
 import '../features/transactions/create/create_transaction_page.dart';
 import '../features/transactions/transaction_detail_page.dart';
 import '../features/transactions/transactions_page.dart';
@@ -69,7 +69,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/settings',
-        builder: (_, __) => const PlaceholderPage(title: '설정'),
+        builder: (_, __) => const SettingsPage(),
       ),
       GoRoute(
         path: '/transaction/:transactionId',

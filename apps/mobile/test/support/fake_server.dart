@@ -153,7 +153,13 @@ class FakeServer {
   /// The signed-in user's balance in cents. Payments and accepted requests change it.
   int balance = 0;
 
-  Map<String, dynamic> get user => {...testUser, 'balance': balance};
+  /// What the user saved in 설정 (email, phone, name, privacy...). Shown on top of testUser.
+  final Map<String, dynamic> profile = {};
+
+  /// Status code for  (null = it works and answers 204).
+  int? updateUserStatus;
+
+  Map<String, dynamic> get user => {...testUser, ...profile, 'balance': balance};
 
   /// Other users for the "새 거래" list. `GET /users/search?q=` filters them.
   final List<Map<String, dynamic>> users = [];
@@ -318,6 +324,12 @@ class FakeServer {
       return found.isEmpty
           ? jsonBody(404, {'error': 'not found'})
           : jsonBody(200, {'transaction': found.first});
+    }
+    if (o.method == 'PATCH' && o.path.startsWith('/users/')) {
+      if (updateUserStatus != null) return jsonBody(updateUserStatus!, {'error': 'refused'});
+      // Like the real server: the id in the path is not compared with the signed-in user.
+      profile.addAll((o.data as Map<String, dynamic>));
+      return ResponseBody.fromString('', 204);
     }
     if (o.method == 'GET' && o.path == '/bankTransfers') {
       return failTransfers

@@ -24,11 +24,11 @@ This is a **demo app for a QA portfolio**: it is built so that it can be tested 
 - Transaction detail, new payment or request (3 steps), accept or reject a request
 - Likes, comments, and notifications with an unread number
 - My Account (balance), deposit and withdraw between a bank account and the balance, and a transfer history
+- Settings (name, email, phone number, and the default privacy of new transactions)
 - An app info page with the license notices
 
 **Not done yet**
 
-- User settings (the screen is a placeholder)
 - End-to-end tests with WebdriverIO and Appium
 - iOS and real devices have **not** been run or checked
 
