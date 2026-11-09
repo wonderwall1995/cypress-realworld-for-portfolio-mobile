@@ -29,7 +29,8 @@ class TransactionFilters {
   /// Dates: from the start of the first day to the end of the last day, in the
   /// phone's time zone, sent as exact moments (UTC). Amounts: in cents.
   ///
-  /// Note: the server ignores the amount filter when the smallest amount is 0.
+  /// A smallest amount of 0 is sent as it is. (Checked on the real server: it
+  /// filters correctly with 0 on all three lists.)
   Map<String, String> toQuery() => {
         if (hasDate)
           'dateRangeStart': DateTime(dateStart!.year, dateStart!.month, dateStart!.day)

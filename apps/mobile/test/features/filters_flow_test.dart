@@ -166,7 +166,7 @@ void main() {
       expect(byId('transaction-list-filter-amount-clear-button'), findsNothing);
     });
 
-    testWidgets('a minimum of 0 is sent as it is (the server ignores it)', (tester) async {
+    testWidgets('a minimum of 0 is sent as it is', (tester) async {
       final server = newServer();
       await pumpApp(tester, server);
       await tapId(tester, 'transaction-list-filter-amount-range-button');
