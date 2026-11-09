@@ -13,9 +13,13 @@ Finder byId(String id) => find.byKey(ValueKey<String>(id));
 Finder fieldIn(String id) =>
     find.descendant(of: byId(id), matching: find.byType(TextFormField));
 
-Future<void> pumpApp(WidgetTester tester, FakeServer server) async {
-  // A tall screen, so the whole form is visible.
-  tester.view.physicalSize = const Size(800, 1600);
+Future<void> pumpApp(
+  WidgetTester tester,
+  FakeServer server, {
+  // A tall screen by default, so a whole form is visible.
+  Size size = const Size(800, 1600),
+}) async {
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
 

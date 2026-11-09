@@ -25,6 +25,33 @@ Map<String, dynamic> testAccount(
       'isDeleted': isDeleted,
     };
 
+/// A transaction as the server sends it. [amount] is in cents.
+Map<String, dynamic> testTransaction(
+  String id, {
+  String sender = 'Alice Test',
+  String receiver = 'Bob Test',
+  String description = 'Test payment',
+  int amount = 500,
+  String? requestStatus,
+  String status = 'complete',
+  int likes = 0,
+  int comments = 0,
+}) =>
+    {
+      'id': id,
+      'senderId': 's-$id',
+      'receiverId': 'r-$id',
+      'senderName': sender,
+      'receiverName': receiver,
+      'description': description,
+      'amount': amount,
+      'status': status,
+      // A payment has no requestStatus at all, as on the real server.
+      if (requestStatus != null) 'requestStatus': requestStatus,
+      'likes': List.generate(likes, (i) => {'id': 'l$i'}),
+      'comments': List.generate(comments, (i) => {'id': 'c$i'}),
+    };
+
 /// A small in-memory copy of the web API. No network is used.
 /// Set the flags to make a request fail.
 class FakeServer {
@@ -48,6 +75,24 @@ class FakeServer {
   /// The accounts that are not deleted.
   List<Map<String, dynamic>> get activeAccounts =>
       accounts.where((a) => a['isDeleted'] != true).toList();
+
+  /// The three transaction lists (web tabs: Everyone, Friends, Mine).
+  final List<Map<String, dynamic>> everyone = [];
+  final List<Map<String, dynamic>> friends = [];
+  final List<Map<String, dynamic>> mine = [];
+
+  /// Page numbers (1, 2, ...) for which a list request fails.
+  final Set<int> failPages = {};
+  bool failTransactionDetail = false;
+
+  /// Every list request, as `/path:page`.
+  final List<String> feedRequests = [];
+
+  Map<String, List<Map<String, dynamic>>> get _feeds => {
+        '/transactions/public': everyone,
+        '/transactions/contacts': friends,
+        '/transactions': mine,
+      };
 
   /// Every request, as `METHOD /path`.
   final List<String> calls = [];
@@ -97,6 +142,34 @@ class FakeServer {
         final account = {'id': 'new${_nextId++}', ...body, 'isDeleted': false};
         accounts.add(account);
         return jsonBody(200, {'account': account});
+    }
+    final feed = _feeds[o.path];
+    if (o.method == 'GET' && feed != null) {
+      final page = int.parse('${o.queryParameters['page'] ?? 1}');
+      final limit = int.parse('${o.queryParameters['limit'] ?? 10}');
+      feedRequests.add('${o.path}:$page');
+      if (failPages.contains(page)) return jsonBody(500, {'error': 'boom'});
+      final start = (page - 1) * limit;
+      final end = start + limit;
+      final results = feed.skip(start).take(limit).toList();
+      return jsonBody(200, {
+        'pageData': {
+          'page': page,
+          'limit': limit,
+          'hasNextPages': end < feed.length,
+          'totalPages': (feed.length / limit).ceil(),
+        },
+        'results': results,
+      });
+    }
+    if (o.method == 'GET' && o.path.startsWith('/transactions/')) {
+      if (failTransactionDetail) return jsonBody(500, {'error': 'boom'});
+      final id = o.path.substring('/transactions/'.length);
+      final all = [...everyone, ...friends, ...mine];
+      final found = all.where((t) => t['id'] == id);
+      return found.isEmpty
+          ? jsonBody(404, {'error': 'not found'})
+          : jsonBody(200, {'transaction': found.first});
     }
     if (o.method == 'DELETE' && o.path.startsWith('/bankAccounts/')) {
       if (failAccountDelete) return jsonBody(500, {'error': 'boom'});

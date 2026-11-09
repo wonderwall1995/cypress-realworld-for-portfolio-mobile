@@ -10,6 +10,8 @@ import '../features/bank_accounts/bank_accounts_page.dart';
 import '../features/onboarding/onboarding_page.dart';
 import '../features/shell/home_shell.dart';
 import '../features/shell/placeholder_page.dart';
+import '../features/transactions/transaction_detail_page.dart';
+import '../features/transactions/transactions_page.dart';
 import 'app_gate.dart';
 
 const _splash = '/splash';
@@ -50,13 +52,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/bankaccounts/new',
         builder: (_, __) => const BankAccountNewPage(),
       ),
+      GoRoute(
+        path: '/transaction/:transactionId',
+        builder: (_, state) =>
+            TransactionDetailPage(transactionId: state.pathParameters['transactionId']!),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (_, __, shell) => HomeShell(navigationShell: shell),
         branches: [
           StatefulShellBranch(routes: [
             GoRoute(
               path: '/',
-              builder: (_, __) => const PlaceholderPage(title: '홈'),
+              builder: (_, __) => const TransactionsPage(),
             ),
           ]),
           StatefulShellBranch(routes: [

@@ -50,7 +50,7 @@ void main() {
 
       // Home, with the new account in the list
       expect(byId('user-onboarding-dialog'), findsNothing);
-      expect(find.text('홈 화면'), findsOneWidget);
+      expect(byId('nav-transaction-tabs'), findsOneWidget);
       await tapId(tester, 'sidenav-bankaccounts');
       expect(find.text('Test Bank Two'), findsOneWidget);
     });
@@ -115,14 +115,14 @@ void main() {
       await pumpApp(tester, FakeServer(signedIn: true, accounts: [testAccount('b1')]));
 
       expect(byId('user-onboarding-dialog'), findsNothing);
-      expect(find.text('홈 화면'), findsOneWidget);
+      expect(byId('nav-transaction-tabs'), findsOneWidget);
     });
 
     testWidgets('is skipped when the account list cannot be loaded', (tester) async {
       await pumpApp(tester, FakeServer(signedIn: true)..failAccountList = true);
 
       expect(byId('user-onboarding-dialog'), findsNothing);
-      expect(find.text('홈 화면'), findsOneWidget);
+      expect(byId('nav-transaction-tabs'), findsOneWidget);
 
       await tapId(tester, 'sidenav-bankaccounts');
       expect(byId('bankaccount-load-error'), findsOneWidget);

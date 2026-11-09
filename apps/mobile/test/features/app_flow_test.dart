@@ -33,7 +33,7 @@ void main() {
       await pumpApp(tester, serverWithAccount());
 
       expect(byId('signin-username'), findsNothing);
-      expect(find.text('홈 화면'), findsOneWidget);
+      expect(byId('nav-transaction-tabs'), findsOneWidget);
 
       await tapId(tester, 'sidenav-notifications');
       expect(find.text('알림 화면'), findsOneWidget);
@@ -101,7 +101,7 @@ void main() {
         server.bodies['POST /login'],
         {'username': 'tester', 'password': 'pw-1234', 'remember': true},
       );
-      expect(find.text('홈 화면'), findsOneWidget);
+      expect(byId('nav-transaction-tabs'), findsOneWidget);
       expect(byId('signin-username'), findsNothing);
     });
   });
@@ -191,7 +191,7 @@ void main() {
       expect(find.text('Ada Kim'), findsOneWidget);
       expect(find.text('@tester'), findsOneWidget);
       // The ... button opens a menu. It does not change the tab.
-      expect(find.text('홈 화면'), findsOneWidget);
+      expect(byId('nav-transaction-tabs'), findsOneWidget);
 
       await tapId(tester, 'sidenav-signout');
 

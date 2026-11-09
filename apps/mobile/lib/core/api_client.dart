@@ -152,6 +152,36 @@ class ApiClient {
     }
   }
 
+  /// One page of a transaction list. [feedPath] is `/transactions/public`,
+  /// `/transactions/contacts`, or `/transactions` (the user's own).
+  Future<({List<Map<String, dynamic>> results, bool hasNextPages})> getTransactions(
+    String feedPath, {
+    required int page,
+    int limit = 10,
+  }) async {
+    try {
+      final response = await dio.get<Map<String, dynamic>>(
+        feedPath,
+        queryParameters: {'page': page, 'limit': limit},
+      );
+      final data = response.data ?? const <String, dynamic>{};
+      final results = (data['results'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+      final pageData = data['pageData'] as Map<String, dynamic>?;
+      return (results: results, hasNextPages: pageData?['hasNextPages'] == true);
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> getTransaction(String id) async {
+    try {
+      final response = await dio.get<Map<String, dynamic>>('/transactions/$id');
+      return response.data!['transaction'] as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   /// Signs out. The cookie on this device is removed even if the server
   /// cannot be reached.
   Future<void> logout() async {
