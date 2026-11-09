@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api_client.dart';
 import '../../../core/test_id.dart';
 import '../../auth/auth_widgets.dart';
+import '../amount_input.dart';
 import '../transaction.dart';
 import '../transaction_widgets.dart';
 import 'create_transaction_controller.dart';
@@ -189,10 +190,6 @@ class _UserTile extends ConsumerWidget {
 
 // ---- Step 2: amount and note -----------------------------------------------
 
-/// The largest amount in whole dollars. The server keeps cents in a 32-bit
-/// number, so a bigger amount would fail there.
-const maxDollars = 9999999;
-
 String transactionErrorMessage(ApiException e, {required bool isPayment}) {
   if (e.isConnection) return '서버에 연결할 수 없습니다.';
   final what = isPayment ? '결제' : '요청';
@@ -240,16 +237,6 @@ class _PaymentStepState extends ConsumerState<_PaymentStep> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  String? _validateAmount(String? v) {
-    final text = v?.trim() ?? '';
-    if (text.isEmpty) return '금액을 입력하세요.';
-    final dollars = int.tryParse(text);
-    if (dollars == null) return '금액은 숫자로 입력하세요. (달러 단위, 소수점 없음)';
-    if (dollars < 1) return '금액은 1달러 이상이어야 합니다.';
-    if (dollars > maxDollars) return '금액은 $maxDollars달러 이하여야 합니다.';
-    return null;
   }
 
   @override
@@ -304,7 +291,7 @@ class _PaymentStepState extends ConsumerState<_PaymentStep> {
                       ),
                       keyboardType: TextInputType.number,
                       textInputAction: TextInputAction.next,
-                      validator: _validateAmount,
+                      validator: validateDollars,
                     ),
                   ),
                   const SizedBox(height: 16),

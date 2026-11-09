@@ -23,11 +23,12 @@ This is a **demo app for a QA portfolio**: it is built so that it can be tested 
 - Transaction lists (everyone, friends, mine) with scrolling pages, pull to refresh, and date and amount filters
 - Transaction detail, new payment or request (3 steps), accept or reject a request
 - Likes, comments, and notifications with an unread number
-- My Account (balance) and an app info page with the license notices
+- My Account (balance), deposit and withdraw between a bank account and the balance, and a transfer history
+- An app info page with the license notices
 
 **Not done yet**
 
-- Deposit and withdraw (the server has the API; the screens wait for the web design)
+- User settings (the screen is a placeholder)
 - End-to-end tests with WebdriverIO and Appium
 - iOS and real devices have **not** been run or checked
 

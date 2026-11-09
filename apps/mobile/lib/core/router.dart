@@ -8,6 +8,7 @@ import '../features/auth/signin_page.dart';
 import '../features/auth/signup_page.dart';
 import '../features/auth/splash_page.dart';
 import '../features/bank_accounts/bank_account_new_page.dart';
+import '../features/bank_transfers/bank_transfer_page.dart';
 import '../features/bank_accounts/bank_accounts_page.dart';
 import '../features/notifications/notifications_page.dart';
 import '../features/onboarding/onboarding_page.dart';
@@ -61,6 +62,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const CreateTransactionPage(),
       ),
       GoRoute(path: '/about', builder: (_, __) => const AboutPage()),
+      GoRoute(
+        path: '/bank-transfer/:type',
+        builder: (_, state) =>
+            BankTransferPage(isDeposit: state.pathParameters['type'] != 'withdrawal'),
+      ),
       GoRoute(
         path: '/settings',
         builder: (_, __) => const PlaceholderPage(title: '설정'),

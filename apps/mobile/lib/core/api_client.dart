@@ -272,6 +272,37 @@ class ApiClient {
     }
   }
 
+  /// The signed-in user's bank transfers (deposits and withdrawals), including
+  /// the withdrawals the server makes by itself to cover a payment.
+  Future<List<Map<String, dynamic>>> getBankTransfers() async {
+    try {
+      final response = await dio.get<Map<String, dynamic>>('/bankTransfers');
+      final transfers = response.data?['transfers'] as List<dynamic>? ?? const [];
+      return transfers.cast<Map<String, dynamic>>();
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// A virtual deposit or withdrawal, done at once. [amount] is in whole dollars.
+  /// [type] is `deposit` or `withdrawal`. The server answers 400 with
+  /// `{"error": "..."}` when it refuses, and 422 for a badly formed request.
+  Future<Map<String, dynamic>> moveMoney({
+    required String bankAccountId,
+    required int amount,
+    required String type,
+  }) async {
+    try {
+      final response = await dio.post<Map<String, dynamic>>(
+        '/bankTransfers',
+        data: {'bankAccountId': bankAccountId, 'amount': amount, 'type': type},
+      );
+      return response.data!['transfer'] as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   /// Signs out. The cookie on this device is removed even if the server
   /// cannot be reached.
   Future<void> logout() async {

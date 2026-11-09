@@ -96,6 +96,31 @@ Map<String, dynamic> testOtherUser(String id, String first, String last, {String
       'username': username ?? first.toLowerCase(),
     };
 
+/// A bank transfer as the server sends it. Amounts are in cents. An empty
+/// [source] and a [transactionId] mean the server made it to cover a payment.
+Map<String, dynamic> testTransfer(
+  String id,
+  String type,
+  int amount, {
+  String source = 'b1',
+  String? transactionId,
+  int balanceBefore = 0,
+  int balanceAfter = 0,
+  String createdAt = '2026-11-09T18:21:22.378Z',
+}) =>
+    {
+      'id': id,
+      'userId': 'u1',
+      'source': source,
+      'amount': amount,
+      'type': type,
+      'status': 'completed',
+      'transactionId': transactionId,
+      'balanceBefore': balanceBefore,
+      'balanceAfter': balanceAfter,
+      'createdAt': createdAt,
+    };
+
 /// A small in-memory copy of the web API. No network is used.
 /// Set the flags to make a request fail.
 class FakeServer {
@@ -134,6 +159,13 @@ class FakeServer {
   final List<Map<String, dynamic>> users = [];
   final List<String> userQueries = [];
   bool failUsers = false;
+
+  /// The signed-in user's deposits and withdrawals.
+  final List<Map<String, dynamic>> transfers = [];
+  bool failTransfers = false;
+
+  /// Status code for `POST /bankTransfers` (null = the real rules below).
+  int? moveMoneyStatus;
 
   /// Unread notifications. Marking one as read removes it from the list.
   final List<Map<String, dynamic>> notifications = [];
@@ -286,6 +318,53 @@ class FakeServer {
       return found.isEmpty
           ? jsonBody(404, {'error': 'not found'})
           : jsonBody(200, {'transaction': found.first});
+    }
+    if (o.method == 'GET' && o.path == '/bankTransfers') {
+      return failTransfers
+          ? jsonBody(500, {'error': 'boom'})
+          : jsonBody(200, {'transfers': [...transfers]});
+    }
+    if (o.method == 'POST' && o.path == '/bankTransfers') {
+      if (moveMoneyStatus != null) return jsonBody(moveMoneyStatus!, {'error': 'refused'});
+      final body = o.data as Map<String, dynamic>;
+      final amount = body['amount'];
+      // The real rules (see the web repo's banktransfer-service).
+      if (amount is! int || amount < 1) {
+        return jsonBody(422, {
+          'errors': [
+            {'msg': 'Invalid value', 'param': 'amount', 'location': 'body'},
+          ],
+        });
+      }
+      final type = body['type'];
+      if (type != 'deposit' && type != 'withdrawal') {
+        return jsonBody(400, {'error': 'type must be deposit or withdrawal'});
+      }
+      final account = accounts.where((a) => a['id'] == body['bankAccountId']);
+      if (account.isEmpty) return jsonBody(404, {'error': 'bank account not found'});
+      if (account.first['isDeleted'] == true) {
+        return jsonBody(400, {'error': 'this bank account was deleted'});
+      }
+      final cents = amount * 100;
+      final after = type == 'deposit' ? balance + cents : balance - cents;
+      if (type == 'withdrawal' && after < 0) {
+        return jsonBody(400, {'error': 'not enough balance'});
+      }
+      if (after > 2147483647) {
+        return jsonBody(400, {'error': 'the balance would be too large'});
+      }
+      final transfer = testTransfer(
+        'tr${_nextId++}',
+        type as String,
+        cents,
+        source: body['bankAccountId'] as String,
+        balanceBefore: balance,
+        balanceAfter: after,
+        createdAt: DateTime.now().toUtc().toIso8601String(),
+      );
+      balance = after;
+      transfers.add(transfer);
+      return jsonBody(201, {'transfer': transfer});
     }
     if (o.method == 'GET' && o.path == '/notifications') {
       return failNotifications
