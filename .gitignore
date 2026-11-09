@@ -1,0 +1,26 @@
+# secrets (never commit)
+.env
+.env.*
+!.env.example
+key.properties
+*.jks
+*.keystore
+local.properties
+
+# node
+node_modules/
+
+# flutter / android / ios build output
+.dart_tool/
+build/
+.flutter-plugins*
+*.iml
+Pods/
+DerivedData/
+
+# test output
+tests/e2e/logs/
+tests/e2e/allure-results/
+
+.DS_Store
+.idea/

@@ -1,0 +1,53 @@
+# Rules
+- `Korean`으로 ASD-STE100 가 쓰인 것처럼 본 작업에 대해 논하는 것을 권장한다.
+- Specific developing section, functions 에 대한 Develop을 진행할 때, 개별 항목을 User에게 질문하며 진행한다.
+- 본 문서를 수정하는데 있어 User의 허락을 구한다. - 본 문서 기준, 개발 진행 했고 Drop 시킨 내용에 대하여 본 문서 안에서 그 여부를 넘버링 옆에 라벨처럼 서술한다. 이 조건 충족시에만 문서 편집을 허락한다.
+- Development 과정에서 상세한 기술 및 코드에 대한 질문을 묻는 대신 `자연어` 사용을 권장한다.
+- LLMS가 본 문서의 내용 추가를 할 때, Oneline 작문을 기본으로 한다. 정보 제시가 더 필요한 상태, 맥락을 설명하는 상황에선 세션으로 LLM이 보충 조언한다.
+- LLMS.md 파일은 공개 (Public) 될 내용의 일부이기에, 보안 내용의 작성을 엄금하며 User가 작성한 경우 LLM은 이것에 대한 주의를 표한다.
+- 본 프로젝트는 Open 상태로 진행한다. 보안 또는 개인 정보 문제에 민감하게 참조할 것.
+- 웹 레포(cypress-realworld-for-portfolio)가 원본이다. 이 레포에서 웹 코드를 고치지 않는다. 웹 쪽 수정이 필요하면 요청 항목으로 정리해 User에게 전달한다.
+- 서버 주소와 포트는 설정값으로 분리한다. 코드에 `localhost`를 직접 쓰지 않는다. (Android 에뮬레이터에서 `localhost`는 에뮬레이터 자신이다.)
+- 작업 관리는 Node.js(pnpm)로 한다. melos를 쓰지 않는다. Flutter, Dart 명령은 pnpm 스크립트로 감싸서 쓴다.
+- 서명 키(keystore), key.properties, .env 같은 비밀 파일은 첫 커밋 전에 .gitignore에 넣는다. 예시 파일(.env.example)만 커밋한다.
+- Appium으로 누르거나 읽는 모든 위젯에 식별자(ValueKey 또는 Semantics identifier)를 붙인다. 이름은 웹의 data-testid와 같은 이름을 쓴다.
+- 직접 실행해 확인하지 못한 플랫폼(iOS 등)은 "동작한다"고 쓰지 않는다. 확인한 것과 확인하지 못한 것을 나누어 적는다.
+- 앱 이름에 "Cypress"를 쓸 수 있다. 원저작권은 모두 Cypress.io 팀에게 있고, LICENSE의 MIT 전문과 저작권 고지는 항상 유지하며, 로고 SVG와 상표 이미지는 쓰지 않는다.
+
+# To-do
+<!-- 할 일 목록 -->
+1. [결정: 네이티브 재작성] 앱 방식을 정하자. WebView 셸, 네이티브 재작성, 또는 둘 다 중에서 User와 함께 고른다.
+2. [웹 레포에서 처리, 이 PC에서 미확인] 웹 레포의 `/api` 프록시 변경(브랜치 chore/ui-change-api-proxy)을 병합하고, 이 레포가 그 상태를 기준으로 삼는다.
+3. [완료] pnpm 워크스페이스 뼈대(Flutter 앱, WDIO 테스트 폴더, 루트 스크립트)를 제안하고 확정하자.
+4. Android 에뮬레이터에서 앱이 웹 서버에 접속해 로그인까지 되는지 최소 확인을 하자.
+5. WDIO + Appium으로 테스트 1개를 돌려, 앱을 실행하고 요소를 찾는 데까지 확인하자.
+
+# Backlogs
+<!-- 해야 하지만 조금 나중에 -->
+- Demo 배포 방식을 검토한다. (웹, API, PostgreSQL을 외부에서 열 곳과 로그인 세션 저장 방식을 함께 본다.)
+- 네이티브 화면을 얼마나 넣을지 정한다. (네이티브와 WebView를 오가는 하이브리드 테스트 시나리오 포함)
+- CI에서 Android 에뮬레이터와 Appium을 실행하는 방법을 검토한다.
+- iOS는 macOS CI 러너의 시뮬레이터 빌드와 테스트가 가능한지 검토한다.
+- 공개 전 보안 점검을 한다.
+
+# Done
+<!-- 완료 -->
+- 모바일 저장소를 만들고 git을 초기화했다. (main)
+- pnpm 워크스페이스 뼈대(apps/mobile Flutter 앱, tests/e2e, 루트 pnpm 스크립트)를 만들고 analyze와 기본 테스트 통과를 확인했다. (Android 실행과 iOS는 미확인)
+
+# Bugs
+<!-- 발견된 버그 -->
+-
+
+# Drops
+<!-- 할 필요 없음 판단된 업무 목록 -->
+- Google Play, App Store 마켓 배포. Demo 배포만 한다. (Cypress 이름 사용으로 상표 문제가 생길 수 있어 포기)
+
+# Licenses
+- 원본 Cypress Real World App의 코드나 화면 구조를 옮겨 쓰는 경우, MIT 라이선스 전문과 Copyright (c) 2020 Cypress.io 저작권 고지를 LICENSE에 유지한다.
+- 이 저장소는 웹 포트폴리오 레포(원본 cypress-io/cypress-realworld-app의 개인 포크)의 모바일 짝임을 README에 명시하고, Cypress.io와 제휴·보증·후원 관계가 없음을 밝힌다.
+- 본 프로젝트는 개인 학습과 포트폴리오라는 비상업적 목적으로만 사용한다. 마켓 배포는 하지 않는다.
+- 앱 이름에 "Cypress"를 쓴다. 단 Cypress 로고 SVG와 상표 이미지는 화면, 문서, 아이콘에 노출하지 않으며, 원저작권은 모두 Cypress.io 팀에게 있고 이 앱은 비공식이며 제휴·보증·후원 관계가 없음을 앱과 README에 밝힌다.
+- 내가 수정한 부분도 MIT 라이선스 조건에 따라 공유하고, 소프트웨어는 "있는 그대로" 제공되며 무보증임을 전제로 한다.
+- 새로 추가하는 서드파티 의존성(Flutter 패키지, WDIO, Appium 등)은 각 라이선스를 확인하고 그 조건을 따른다.
+- 외부 서비스의 키와 비밀번호는 커밋되지 않는 파일에만 두고 절대 커밋하지 않는다.

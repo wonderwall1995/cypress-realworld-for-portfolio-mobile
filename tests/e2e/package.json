@@ -1,0 +1,8 @@
+{
+  "name": "e2e",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "test": "echo \"WDIO is not installed yet (To-do 5)\" && exit 1"
+  }
+}
