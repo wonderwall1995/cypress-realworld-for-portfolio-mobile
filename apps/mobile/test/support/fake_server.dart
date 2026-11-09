@@ -161,6 +161,12 @@ class FakeServer {
   /// Every list request, as `/path:page`.
   final List<String> feedRequests = [];
 
+  /// The query of every list request (page, limit, and the filters if any).
+  final List<Map<String, dynamic>> feedQueries = [];
+
+  /// What the server returns when a request has a date or amount filter.
+  final List<Map<String, dynamic>> filtered = [];
+
   Map<String, List<Map<String, dynamic>>> get _feeds => {
         '/transactions/public': everyone,
         '/transactions/contacts': friends,
@@ -254,16 +260,20 @@ class FakeServer {
       final page = int.parse('${o.queryParameters['page'] ?? 1}');
       final limit = int.parse('${o.queryParameters['limit'] ?? 10}');
       feedRequests.add('${o.path}:$page');
+      feedQueries.add({...o.queryParameters});
+      final hasFilter = o.queryParameters.keys
+          .any((k) => k.startsWith('dateRange') || k.startsWith('amount'));
+      final source = hasFilter ? filtered : feed;
       if (failPages.contains(page)) return jsonBody(500, {'error': 'boom'});
       final start = (page - 1) * limit;
       final end = start + limit;
-      final results = feed.skip(start).take(limit).toList();
+      final results = source.skip(start).take(limit).toList();
       return jsonBody(200, {
         'pageData': {
           'page': page,
           'limit': limit,
-          'hasNextPages': end < feed.length,
-          'totalPages': (feed.length / limit).ceil(),
+          'hasNextPages': end < source.length,
+          'totalPages': (source.length / limit).ceil(),
         },
         'results': results,
       });

@@ -98,7 +98,7 @@ void main() {
       expect(byId('alert-bar-success'), findsOneWidget);
 
       // $50.00 - $7.00
-      await tester.pageBack();
+      await goBack(tester);
       await tester.pumpAndSettle();
       await tapId(tester, 'sidenav-my-account');
       expect(find.descendant(of: byId('sidenav-user-balance'), matching: find.text('\$43.00')), findsOneWidget);

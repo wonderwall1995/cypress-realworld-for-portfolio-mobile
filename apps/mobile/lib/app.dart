@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router.dart';
@@ -11,6 +12,10 @@ class App extends ConsumerWidget {
     return MaterialApp.router(
       title: 'Cypress Realworld For Personal Portfolio Mobile',
       theme: ThemeData(useMaterial3: true),
+      // Korean texts for the date picker, back button, tooltips, and so on.
+      locale: const Locale('ko'),
+      supportedLocales: const [Locale('ko'), Locale('en')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       routerConfig: ref.watch(routerProvider),
     );
   }

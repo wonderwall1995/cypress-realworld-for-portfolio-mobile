@@ -80,7 +80,7 @@ void main() {
       await tapId(tester, 'signup');
       expect(byId('signup-title'), findsOneWidget);
 
-      await tester.pageBack();
+      await goBack(tester);
       await tester.pumpAndSettle();
 
       expect(byId('signin-error'), findsNothing);

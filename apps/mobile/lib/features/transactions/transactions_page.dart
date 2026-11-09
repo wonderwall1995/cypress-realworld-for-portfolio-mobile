@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/test_id.dart';
 import 'transaction_feed_controller.dart';
+import 'transaction_filter_bar.dart';
 import 'transaction_list_view.dart';
 
 /// The "홈" tab: a "새 거래" button on the left of the tab row, then three
@@ -49,9 +50,16 @@ class TransactionsPage extends StatelessWidget {
             ),
           ),
         ),
-        body: TabBarView(
+        body: Column(
           children: [
-            for (final feed in TransactionFeed.values) TransactionListView(feed: feed),
+            const TransactionFilterBar(),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  for (final feed in TransactionFeed.values) TransactionListView(feed: feed),
+                ],
+              ),
+            ),
           ],
         ),
       ),

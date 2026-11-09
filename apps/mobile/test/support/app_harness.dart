@@ -39,3 +39,10 @@ Future<void> tapId(WidgetTester tester, String id) async {
 
 Future<void> enter(WidgetTester tester, String id, String text) =>
     tester.enterText(fieldIn(id), text);
+
+/// Taps the back arrow in the top bar. (`tester.pageBack()` looks for the
+/// English tooltip "Back", but the app is in Korean.)
+Future<void> goBack(WidgetTester tester) async {
+  await tester.tap(find.byType(BackButton));
+  await tester.pumpAndSettle();
+}

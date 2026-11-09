@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/test_id.dart';
 import 'transaction.dart';
 import 'transaction_feed_controller.dart';
+import 'transaction_filters.dart';
 import 'transaction_widgets.dart';
 
 /// One of the three lists. Scroll to the end to load 10 more; pull down to
@@ -89,13 +90,14 @@ class _TransactionListViewState extends ConsumerState<TransactionListView>
   }
 }
 
-class _EmptyList extends StatelessWidget {
+class _EmptyList extends ConsumerWidget {
   const _EmptyList({required this.onRefresh});
 
   final Future<void> Function() onRefresh;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final filtersActive = ref.watch(transactionFiltersProvider).isActive;
     // A scroll view, so pulling down works on an empty list too.
     return LayoutBuilder(
       builder: (context, constraints) => SingleChildScrollView(
@@ -106,15 +108,27 @@ class _EmptyList extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const TestId('transaction-list-empty', child: Text('거래가 없습니다.')),
-                const SizedBox(height: 16),
                 TestId(
-                  'transaction-list-empty-create-transaction-button',
-                  child: FilledButton(
-                    onPressed: () => context.push('/transaction/new'),
-                    child: const Text('거래 만들기'),
-                  ),
+                  'transaction-list-empty',
+                  child: Text(filtersActive ? '조건에 맞는 거래가 없습니다.' : '거래가 없습니다.'),
                 ),
+                const SizedBox(height: 16),
+                if (filtersActive)
+                  TestId(
+                    'transaction-list-filter-clear-all',
+                    child: OutlinedButton(
+                      onPressed: ref.read(transactionFiltersProvider.notifier).clearAll,
+                      child: const Text('필터 지우기'),
+                    ),
+                  )
+                else
+                  TestId(
+                    'transaction-list-empty-create-transaction-button',
+                    child: FilledButton(
+                      onPressed: () => context.push('/transaction/new'),
+                      child: const Text('거래 만들기'),
+                    ),
+                  ),
               ],
             ),
           ),

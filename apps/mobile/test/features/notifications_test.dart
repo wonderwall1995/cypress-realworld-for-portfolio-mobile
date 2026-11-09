@@ -192,7 +192,7 @@ void main() {
       expect(server.calls, contains('GET /transactions/t1'));
       expect(server.calls.where((c) => c.startsWith('PATCH /notifications')), isEmpty);
 
-      await tester.pageBack();
+      await goBack(tester);
       await tester.pumpAndSettle();
       expect(byId('notification-list-item-n1'), findsOneWidget);
     });

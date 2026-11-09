@@ -74,7 +74,7 @@ void main() {
       await openDetail(tester, 't1');
       await tapId(tester, 'transaction-like-button-t1');
 
-      await tester.pageBack();
+      await goBack(tester);
       await tester.pumpAndSettle();
 
       expect(find.descendant(of: byId('transaction-item-t1'), matching: find.text('1')), findsWidgets);
@@ -173,7 +173,7 @@ void main() {
       await tester.pump();
       await tapId(tester, 'transaction-comment-submit-t1');
 
-      await tester.pageBack();
+      await goBack(tester);
       await tester.pumpAndSettle();
 
       final count = find.descendant(of: byId('transaction-item-t1'), matching: byId('transaction-comment-count'));

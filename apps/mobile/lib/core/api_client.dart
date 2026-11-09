@@ -158,11 +158,12 @@ class ApiClient {
     String feedPath, {
     required int page,
     int limit = 10,
+    Map<String, String> filters = const {},
   }) async {
     try {
       final response = await dio.get<Map<String, dynamic>>(
         feedPath,
-        queryParameters: {'page': page, 'limit': limit},
+        queryParameters: {'page': page, 'limit': limit, ...filters},
       );
       final data = response.data ?? const <String, dynamic>{};
       final results = (data['results'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();

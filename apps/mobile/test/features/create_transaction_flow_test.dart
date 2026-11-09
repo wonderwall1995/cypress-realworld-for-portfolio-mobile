@@ -165,7 +165,7 @@ void main() {
     testWidgets('Back goes to step 1, not out of the screen', (tester) async {
       await toStep2(tester, newServer());
 
-      await tester.pageBack();
+      await goBack(tester);
       await tester.pumpAndSettle();
 
       expect(byId('user-list-item-u2'), findsOneWidget);

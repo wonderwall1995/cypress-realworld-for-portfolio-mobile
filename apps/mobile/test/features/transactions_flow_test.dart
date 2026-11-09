@@ -245,7 +245,7 @@ void main() {
       expect(byId('transaction-receiver-avatar'), findsOneWidget);
       expect(server.calls, contains('GET /transactions/t1'));
 
-      await tester.pageBack();
+      await goBack(tester);
       await tester.pumpAndSettle();
 
       expect(byId('transaction-detail-header'), findsNothing);
@@ -272,7 +272,7 @@ void main() {
           findsOneWidget,
           reason: id,
         );
-        await tester.pageBack();
+        await goBack(tester);
         await tester.pumpAndSettle();
       }
     });

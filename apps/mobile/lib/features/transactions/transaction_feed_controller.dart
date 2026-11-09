@@ -4,6 +4,7 @@ import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/session.dart';
 import 'transaction.dart';
+import 'transaction_filters.dart';
 
 /// The three lists on the home screen (same as the web tabs).
 enum TransactionFeed {
@@ -56,6 +57,8 @@ class TransactionFeedController extends AsyncNotifier<FeedState> {
   @override
   Future<FeedState> build() async {
     final userId = ref.watch(sessionProvider.select((s) => s.user?['id']));
+    // New filters load the list again from the start.
+    ref.watch(transactionFiltersProvider);
     if (userId == null) return const FeedState();
     return _fetchFirstPage();
   }
@@ -63,7 +66,12 @@ class TransactionFeedController extends AsyncNotifier<FeedState> {
   Future<FeedState> _fetchFirstPage() async {
     final result = await ref
         .read(apiClientProvider)
-        .getTransactions(feed.path, page: 1, limit: _limit);
+        .getTransactions(
+          feed.path,
+          page: 1,
+          limit: _limit,
+          filters: ref.read(transactionFiltersProvider).toQuery(),
+        );
     return FeedState(
       items: result.results.map(Transaction.fromJson).toList(),
       page: 1,
@@ -97,7 +105,12 @@ class TransactionFeedController extends AsyncNotifier<FeedState> {
     try {
       final result = await ref
           .read(apiClientProvider)
-          .getTransactions(feed.path, page: current.page + 1, limit: _limit);
+          .getTransactions(
+            feed.path,
+            page: current.page + 1,
+            limit: _limit,
+            filters: ref.read(transactionFiltersProvider).toQuery(),
+          );
       state = AsyncData(
         FeedState(
           items: [...current.items, ...result.results.map(Transaction.fromJson)],

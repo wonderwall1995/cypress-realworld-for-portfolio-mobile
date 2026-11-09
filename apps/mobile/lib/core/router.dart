@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/about/about_page.dart';
 import '../features/account/my_account_page.dart';
 import '../features/auth/signin_page.dart';
 import '../features/auth/signup_page.dart';
@@ -59,6 +60,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/transaction/new',
         builder: (_, __) => const CreateTransactionPage(),
       ),
+      GoRoute(path: '/about', builder: (_, __) => const AboutPage()),
       GoRoute(
         path: '/settings',
         builder: (_, __) => const PlaceholderPage(title: '설정'),

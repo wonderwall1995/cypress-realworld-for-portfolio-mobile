@@ -152,6 +152,17 @@ class HomeShell extends ConsumerWidget {
               ),
             ),
             TestId(
+              'sidenav-about',
+              child: ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: const Text('앱 정보'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  context.push('/about');
+                },
+              ),
+            ),
+            TestId(
               'sidenav-signout',
               child: ListTile(
                 leading: const Icon(Icons.logout),
