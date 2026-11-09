@@ -5,6 +5,7 @@ import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/session.dart';
 import '../../core/test_id.dart';
+import '../../core/toast.dart';
 import '../auth/auth_widgets.dart';
 import '../transactions/transaction_widgets.dart';
 import 'phone_rule.dart';
@@ -82,8 +83,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final userId = ref.read(sessionProvider).user?['id'] as String?;
     if (userId == null) return;
     // Keep these before the await: the page may be gone after it.
-    final messenger = ScaffoldMessenger.of(context);
-    final toastStyle = Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white);
+    final overlay = Overlay.of(context, rootOverlay: true);
 
     setState(() {
       _busy = true;
@@ -100,17 +100,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           );
       // Load the user again: the name on the 내 계좌 tab and in the menu changes.
       await ref.read(sessionProvider.notifier).refreshUser();
-      messenger.showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
-          content: TestId(
-            'alert-bar-success',
-            child: Text('저장했습니다.', style: toastStyle),
-          ),
-        ),
-      );
+      showToast(overlay, message: '저장했습니다.', success: true);
     } on ApiException catch (e) {
+      showToast(overlay, message: '저장하지 못했습니다.', success: false);
       if (!mounted) return;
       setState(() => _error = saveErrorMessage(e));
     } finally {

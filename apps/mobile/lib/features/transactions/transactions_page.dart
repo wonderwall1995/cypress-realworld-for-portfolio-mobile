@@ -1,3 +1,4 @@
+import '../../core/header_credit.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -18,6 +19,7 @@ class TransactionsPage extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('홈'),
+          actions: const [HeaderCredit()],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(kTextTabBarHeight),
             child: Row(

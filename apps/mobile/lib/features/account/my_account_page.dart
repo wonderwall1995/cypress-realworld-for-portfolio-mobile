@@ -1,3 +1,4 @@
+import '../../core/header_credit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -31,7 +32,7 @@ class MyAccountPage extends ConsumerWidget {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('내 계좌')),
+      appBar: AppBar(title: const Text('내 계좌'), actions: const [HeaderCredit()]),
       body: RefreshIndicator(
         onRefresh: () => _refresh(ref),
         child: ListView(

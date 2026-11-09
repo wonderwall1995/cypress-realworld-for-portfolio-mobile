@@ -1,3 +1,4 @@
+import 'package:cypress_realworld_for_personal_portfolio_mobile/core/toast.dart';
 import 'package:cypress_realworld_for_personal_portfolio_mobile/features/settings/phone_rule.dart';
 import 'package:cypress_realworld_for_personal_portfolio_mobile/features/settings/settings_page.dart';
 import 'package:flutter/material.dart';
@@ -23,6 +24,14 @@ Future<void> fill(WidgetTester tester, {
   await enter(tester, 'user-settings-lastName-input', last);
   await enter(tester, 'user-settings-email-input', email);
   await enter(tester, 'user-settings-phoneNumber-input', phone);
+}
+
+/// Taps 저장 and moves time a little, but not so far that the toast is gone.
+Future<void> saveAndLookAtToast(WidgetTester tester) async {
+  await tester.tap(byId('user-settings-submit'));
+  for (var i = 0; i < 6; i++) {
+    await tester.pump(const Duration(milliseconds: 50));
+  }
 }
 
 String textOf(WidgetTester tester, String id) =>
@@ -125,7 +134,7 @@ void main() {
 
       await fill(tester);
       await tapId(tester, 'user-settings-privacy-private');
-      await tapId(tester, 'user-settings-submit');
+      await saveAndLookAtToast(tester);
 
       expect(server.calls, contains('PATCH /users/u1'));
       expect(server.bodies['PATCH /users/u1'], {
@@ -138,9 +147,42 @@ void main() {
       expect(byId('alert-bar-success'), findsOneWidget);
       final toast = tester.widget<Text>(find.descendant(of: byId('alert-bar-success'), matching: find.byType(Text)));
       expect(toast.data, '저장했습니다.');
-      expect(toast.style?.fontSize, lessThan(14)); // a small text
+      expect(toast.style?.fontSize, 10); // a small text
       // It stays on the settings screen.
       expect(byId('user-settings-form'), findsOneWidget);
+    });
+
+    testWidgets('the success toast is light green, rounded, and in the middle of the screen', (tester) async {
+      await pumpApp(tester, newServer());
+      await openSettings(tester);
+      await fill(tester);
+      await saveAndLookAtToast(tester);
+
+      final material = tester.widget<Material>(
+        find.ancestor(of: byId('alert-bar-success'), matching: find.byType(Material)).first,
+      );
+      expect(material.color, ToastColors.success.background);
+      final shape = material.shape! as RoundedRectangleBorder;
+      expect(shape.borderRadius, BorderRadius.circular(20));
+      final center = tester.getCenter(byId('alert-bar-success'));
+      final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+      expect(center.dx, closeTo(screen.width / 2, 1));
+      expect(center.dy, closeTo(screen.height / 2, 1));
+      expect(byId('alert-bar-error'), findsNothing);
+    });
+
+    testWidgets('the toast goes away after two seconds', (tester) async {
+      await pumpApp(tester, newServer());
+      await openSettings(tester);
+      await fill(tester);
+      await saveAndLookAtToast(tester);
+      expect(byId('alert-bar-success'), findsOneWidget);
+
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 500));
+      }
+
+      expect(byId('alert-bar-success'), findsNothing);
     });
 
     testWidgets('the new name shows on the 내 계좌 tab after saving', (tester) async {
@@ -189,11 +231,18 @@ void main() {
       await openSettings(tester);
 
       await fill(tester, email: 'keep@example.test');
-      await tapId(tester, 'user-settings-submit');
+      await saveAndLookAtToast(tester);
 
       expect(find.text('저장하지 못했습니다. 입력한 내용을 확인해 주세요.'), findsOneWidget);
       expect(byId('user-settings-error'), findsOneWidget);
       expect(textOf(tester, 'user-settings-email-input'), 'keep@example.test');
+      // A pink failure toast too, and no success toast.
+      expect(byId('alert-bar-success'), findsNothing);
+      final material = tester.widget<Material>(
+        find.ancestor(of: byId('alert-bar-error'), matching: find.byType(Material)).first,
+      );
+      expect(material.color, ToastColors.failure.background);
+      expect(find.text('저장하지 못했습니다.'), findsOneWidget);
     });
 
     testWidgets('a server that cannot be reached says so', (tester) async {
