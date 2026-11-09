@@ -42,6 +42,30 @@ class SessionController extends Notifier<SessionState> {
       );
     }
   }
+
+  /// Throws [ApiException] when the sign-in fails.
+  Future<void> signIn({
+    required String username,
+    required String password,
+    required bool remember,
+  }) async {
+    final user = await ref.read(apiClientProvider).login(
+          username: username,
+          password: password,
+          remember: remember,
+        );
+    state = SessionState(status: SessionStatus.authenticated, user: user);
+  }
+
+  /// Always ends signed out on this device, even if the server call fails.
+  Future<void> signOut() async {
+    try {
+      await ref.read(apiClientProvider).logout();
+    } on ApiException {
+      // The local cookie is already removed by the client.
+    }
+    state = const SessionState(status: SessionStatus.unauthenticated);
+  }
 }
 
 final sessionProvider =

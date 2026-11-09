@@ -2,7 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../features/auth/signin_placeholder_page.dart';
+import '../features/auth/signin_page.dart';
+import '../features/auth/signup_page.dart';
 import '../features/auth/splash_page.dart';
 import '../features/shell/home_shell.dart';
 import '../features/shell/placeholder_page.dart';
@@ -10,6 +11,7 @@ import 'session.dart';
 
 const _splash = '/splash';
 const _signIn = '/signin';
+const _signUp = '/signup';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final refresh = ValueNotifier<int>(0);
@@ -26,14 +28,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         case SessionStatus.unknown:
           return at == _splash ? null : _splash;
         case SessionStatus.unauthenticated:
-          return at == _signIn ? null : _signIn;
+          return (at == _signIn || at == _signUp) ? null : _signIn;
         case SessionStatus.authenticated:
-          return (at == _splash || at == _signIn) ? '/' : null;
+          return (at == _splash || at == _signIn || at == _signUp) ? '/' : null;
       }
     },
     routes: [
       GoRoute(path: _splash, builder: (_, __) => const SplashPage()),
-      GoRoute(path: _signIn, builder: (_, __) => const SignInPlaceholderPage()),
+      GoRoute(path: _signIn, builder: (_, __) => const SignInPage()),
+      GoRoute(path: _signUp, builder: (_, __) => const SignUpPage()),
       StatefulShellRoute.indexedStack(
         builder: (_, __, shell) => HomeShell(navigationShell: shell),
         branches: [

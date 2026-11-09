@@ -72,8 +72,65 @@ class ApiClient {
     }
   }
 
-  /// Forgets the session cookie on this device.
-  Future<void> clearSession() => cookieJar.deleteAll();
+  /// Signs in. Returns the user. With [remember], the server keeps the
+  /// session for 30 days (a cookie with an expiry); without it, until the app
+  /// closes.
+  Future<Map<String, dynamic>> login({
+    required String username,
+    required String password,
+    required bool remember,
+  }) async {
+    try {
+      final response = await dio.post<Map<String, dynamic>>(
+        '/login',
+        data: {'username': username, 'password': password, 'remember': remember},
+      );
+      return response.data!['user'] as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// Creates an account. Does not sign in (same as the web).
+  Future<void> signUp({
+    required String firstName,
+    required String lastName,
+    required String username,
+    required String password,
+  }) async {
+    try {
+      await dio.post<Object>(
+        '/users',
+        data: {
+          'firstName': firstName,
+          'lastName': lastName,
+          'username': username,
+          'password': password,
+        },
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// Signs out. The cookie on this device is removed even if the server
+  /// cannot be reached.
+  Future<void> logout() async {
+    try {
+      // The server answers with a redirect to "/". Do not follow it.
+      await dio.post<Object>(
+        '/logout',
+        options: Options(
+          followRedirects: false,
+          validateStatus: (s) => s != null && s < 400,
+        ),
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    } finally {
+      await cookieJar.deleteAll();
+    }
+  }
 }
 
 /// Cookie storage that follows the web rule for "Remember me".
