@@ -4,6 +4,53 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/session.dart';
 import '../../core/test_id.dart';
+import '../notifications/notifications_controller.dart';
+
+/// The red number on the 알림 icon: how many notifications are unread.
+///
+/// It sits on top of the tab bar, as its own element. (Inside the tab it would
+/// be merged into the tab description and could not be found by its test id.)
+class _UnreadBadgeOverlay extends ConsumerWidget {
+  const _UnreadBadgeOverlay({required this.tabIndex, required this.tabCount});
+
+  final int tabIndex;
+  final int tabCount;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final count = ref.watch(unreadCountProvider);
+    if (count == 0) return const SizedBox.shrink();
+
+    final colors = Theme.of(context).colorScheme;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // The tabs share the width equally. Put the badge at the top right of the icon.
+        final centerX = constraints.maxWidth / tabCount * (tabIndex + 0.5);
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Padding(
+            padding: EdgeInsets.only(left: centerX + 4, top: 8),
+            child: TestId(
+              'nav-top-notifications-count',
+              // No `alignment` here: it would make the box as big as the bar.
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: colors.error,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Text(
+                  count > 99 ? '99+' : '$count',
+                  style: TextStyle(color: colors.onError, fontSize: 11, height: 1.2),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
 
 /// Bottom tab bar. Test ids follow the web side menu names.
 ///
@@ -24,31 +71,49 @@ class HomeShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       body: navigationShell,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: navigationShell.currentIndex,
-        onDestinationSelected: (index) {
-          if (index == _tabs.length) {
-            _openMoreMenu(context, ref);
-            return;
-          }
-          // The balance may have changed (a request was accepted, for example).
-          if (_tabs[index].id == 'sidenav-my-account') {
-            ref.read(sessionProvider.notifier).refreshUser();
-          }
-          navigationShell.goBranch(
-            index,
-            initialLocation: index == navigationShell.currentIndex,
-          );
-        },
-        destinations: [
-          for (final tab in _tabs)
-            TestId(
-              tab.id,
-              child: NavigationDestination(icon: Icon(tab.icon), label: tab.label),
+      bottomNavigationBar: Stack(
+        children: [
+          NavigationBar(
+            selectedIndex: navigationShell.currentIndex,
+            onDestinationSelected: (index) {
+              if (index == _tabs.length) {
+                _openMoreMenu(context, ref);
+                return;
+              }
+              // The balance may have changed (a request was accepted, for example).
+              if (_tabs[index].id == 'sidenav-my-account') {
+                ref.read(sessionProvider.notifier).refreshUser();
+              }
+              // New notifications may have come in. (There is no automatic refresh.)
+              if (_tabs[index].id == 'sidenav-notifications') {
+                ref.read(notificationsProvider.notifier).refresh();
+              }
+              navigationShell.goBranch(
+                index,
+                initialLocation: index == navigationShell.currentIndex,
+              );
+            },
+            destinations: [
+              for (final tab in _tabs)
+                TestId(
+                  tab.id,
+                  child: NavigationDestination(icon: Icon(tab.icon), label: tab.label),
+                ),
+              const TestId(
+                'sidenav-more',
+                child: NavigationDestination(icon: Icon(Icons.more_horiz), label: '더보기'),
+              ),
+            ],
+          ),
+          // The unread number, on top of the 알림 tab. Taps go to the tab below;
+          // the meaning (semantics) stays, so a test can find it by its id.
+          Positioned.fill(
+            child: IgnorePointer(
+              child: _UnreadBadgeOverlay(
+                tabIndex: _tabs.indexWhere((t) => t.id == 'sidenav-notifications'),
+                tabCount: _tabs.length + 1, // the tabs and the ... button
+              ),
             ),
-          const TestId(
-            'sidenav-more',
-            child: NavigationDestination(icon: Icon(Icons.more_horiz), label: '더보기'),
           ),
         ],
       ),

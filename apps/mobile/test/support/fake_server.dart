@@ -38,6 +38,8 @@ Map<String, dynamic> testTransaction(
   int comments = 0,
   String? senderId,
   String? receiverId,
+  List<String>? likedBy,
+  List<String>? commentTexts,
 }) =>
     {
       'id': id,
@@ -50,8 +52,40 @@ Map<String, dynamic> testTransaction(
       'status': status,
       // A payment has no requestStatus at all, as on the real server.
       if (requestStatus != null) 'requestStatus': requestStatus,
-      'likes': List.generate(likes, (i) => {'id': 'l$i'}),
-      'comments': List.generate(comments, (i) => {'id': 'c$i'}),
+      'likes': likedBy != null
+          ? [for (var i = 0; i < likedBy.length; i++) {'id': 'l$i', 'userId': likedBy[i]}]
+          : List<Map<String, dynamic>>.generate(likes, (i) => {'id': 'l$i', 'userId': 'other$i'}),
+      'comments': commentTexts != null
+          ? [
+              for (var i = 0; i < commentTexts.length; i++)
+                {
+                  'id': 'c$i',
+                  'content': commentTexts[i],
+                  'userId': 'u2',
+                  'createdAt': '2026-11-09T18:51:10.224Z',
+                }
+            ]
+          : List<Map<String, dynamic>>.generate(
+              comments, (i) => {'id': 'c$i', 'content': 'Comment $i', 'userId': 'u2'}),
+    };
+
+/// A notification as the server sends it. [kind] is `requested`, `received`,
+/// `like` or `comment`.
+Map<String, dynamic> testNotification(
+  String id,
+  String kind, {
+  String name = 'Bob Test',
+  String transactionId = 't1',
+}) =>
+    {
+      'id': id,
+      'userId': 'u1',
+      'transactionId': transactionId,
+      'isRead': false,
+      'userFullName': name,
+      if (kind == 'like') 'likeId': 'like-$id',
+      if (kind == 'comment') 'commentId': 'comment-$id',
+      if (kind == 'requested' || kind == 'received') 'status': kind,
     };
 
 /// Another user, as the server sends it in the user list.
@@ -100,6 +134,19 @@ class FakeServer {
   final List<Map<String, dynamic>> users = [];
   final List<String> userQueries = [];
   bool failUsers = false;
+
+  /// Unread notifications. Marking one as read removes it from the list.
+  final List<Map<String, dynamic>> notifications = [];
+  bool failNotifications = false;
+  bool failMarkRead = false;
+  bool failLike = false;
+  bool failComment = false;
+
+  Map<String, dynamic>? _transaction(String id) {
+    final all = [...everyone, ...friends, ...mine];
+    final found = all.where((t) => t['id'] == id);
+    return found.isEmpty ? null : found.first;
+  }
 
   /// Status code for `POST /transactions` (null = success).
   int? createTransactionStatus;
@@ -229,6 +276,37 @@ class FakeServer {
       return found.isEmpty
           ? jsonBody(404, {'error': 'not found'})
           : jsonBody(200, {'transaction': found.first});
+    }
+    if (o.method == 'GET' && o.path == '/notifications') {
+      return failNotifications
+          ? jsonBody(500, {'error': 'boom'})
+          : jsonBody(200, {'results': [...notifications]});
+    }
+    if (o.method == 'PATCH' && o.path.startsWith('/notifications/')) {
+      if (failMarkRead) return jsonBody(500, {'error': 'boom'});
+      final id = o.path.substring('/notifications/'.length);
+      notifications.removeWhere((n) => n['id'] == id);
+      return ResponseBody.fromString('', 204);
+    }
+    if (o.method == 'POST' && o.path.startsWith('/likes/')) {
+      if (failLike) return jsonBody(500, {'error': 'boom'});
+      final t = _transaction(o.path.substring('/likes/'.length));
+      if (t == null) return jsonBody(404, {'error': 'not found'});
+      // Like the real server: no check for a second like from the same user.
+      (t['likes'] as List).add({'id': 'new${_nextId++}', 'userId': 'u1'});
+      return ResponseBody.fromString('OK', 200);
+    }
+    if (o.method == 'POST' && o.path.startsWith('/comments/')) {
+      if (failComment) return jsonBody(500, {'error': 'boom'});
+      final t = _transaction(o.path.substring('/comments/'.length));
+      if (t == null) return jsonBody(404, {'error': 'not found'});
+      (t['comments'] as List).add({
+        'id': 'new${_nextId++}',
+        'content': (o.data as Map<String, dynamic>)['content'],
+        'userId': 'u1',
+        'createdAt': DateTime.now().toUtc().toIso8601String(),
+      });
+      return ResponseBody.fromString('OK', 200);
     }
     if (o.method == 'PATCH' && o.path.startsWith('/transactions/')) {
       if (updateTransactionStatus != null) {

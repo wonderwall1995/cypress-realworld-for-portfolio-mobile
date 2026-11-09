@@ -205,6 +205,26 @@ void main() {
     });
   });
 
+  group('another user', () {
+    testWidgets('the next user does not see the previous user\'s lists', (tester) async {
+      final server = newServer()..everyone.add(testTransaction('old1', description: 'Old item'));
+      await pumpApp(tester, server);
+      expect(find.text('Old item'), findsOneWidget);
+
+      await tapId(tester, 'sidenav-more');
+      await tapId(tester, 'sidenav-signout');
+      server.everyone
+        ..clear()
+        ..add(testTransaction('new1', description: 'New item'));
+      await enter(tester, 'signin-username', 'someone');
+      await enter(tester, 'signin-password', 'pw-1234');
+      await tapId(tester, 'signin-submit');
+
+      expect(find.text('New item'), findsOneWidget);
+      expect(find.text('Old item'), findsNothing);
+    });
+  });
+
   group('detail', () {
     testWidgets('opens from the list, shows the transaction, and goes back', (tester) async {
       final server = newServer()

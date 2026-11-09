@@ -234,6 +234,43 @@ class ApiClient {
     }
   }
 
+  /// Likes a transaction. The server does not stop a second like from the same
+  /// user, so the app must not send it twice.
+  Future<void> likeTransaction(String transactionId) async {
+    try {
+      await dio.post<Object>('/likes/$transactionId');
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  Future<void> postComment(String transactionId, String content) async {
+    try {
+      await dio.post<Object>('/comments/$transactionId', data: {'content': content});
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// The signed-in user's unread notifications (the server sends only unread ones).
+  Future<List<Map<String, dynamic>>> getNotifications() async {
+    try {
+      final response = await dio.get<Map<String, dynamic>>('/notifications');
+      final results = response.data?['results'] as List<dynamic>? ?? const [];
+      return results.cast<Map<String, dynamic>>();
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  Future<void> markNotificationRead(String notificationId) async {
+    try {
+      await dio.patch<Object>('/notifications/$notificationId', data: {'isRead': true});
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   /// Signs out. The cookie on this device is removed even if the server
   /// cannot be reached.
   Future<void> logout() async {

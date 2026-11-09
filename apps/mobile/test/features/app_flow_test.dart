@@ -36,7 +36,7 @@ void main() {
       expect(byId('nav-transaction-tabs'), findsOneWidget);
 
       await tapId(tester, 'sidenav-notifications');
-      expect(find.text('알림 화면'), findsOneWidget);
+      expect(byId('notifications-empty'), findsOneWidget);
 
       await tapId(tester, 'sidenav-bankaccounts');
       expect(byId('bankaccount-list'), findsOneWidget);

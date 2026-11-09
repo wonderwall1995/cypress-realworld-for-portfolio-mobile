@@ -8,6 +8,7 @@ import '../features/auth/signup_page.dart';
 import '../features/auth/splash_page.dart';
 import '../features/bank_accounts/bank_account_new_page.dart';
 import '../features/bank_accounts/bank_accounts_page.dart';
+import '../features/notifications/notifications_page.dart';
 import '../features/onboarding/onboarding_page.dart';
 import '../features/shell/home_shell.dart';
 import '../features/shell/placeholder_page.dart';
@@ -79,7 +80,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(routes: [
             GoRoute(
               path: '/notifications',
-              builder: (_, __) => const PlaceholderPage(title: '알림'),
+              builder: (_, __) => const NotificationsPage(),
             ),
           ]),
           StatefulShellBranch(routes: [

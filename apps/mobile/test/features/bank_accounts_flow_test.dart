@@ -138,6 +138,26 @@ void main() {
           ],
         );
 
+    testWidgets('the next user does not see the previous user\'s accounts', (tester) async {
+      final server = FakeServer(signedIn: true, accounts: [testAccount('a1', bank: 'Old Test Bank')]);
+      await pumpApp(tester, server);
+      await tapId(tester, 'sidenav-bankaccounts');
+      expect(find.text('Old Test Bank'), findsOneWidget);
+
+      await tapId(tester, 'sidenav-more');
+      await tapId(tester, 'sidenav-signout');
+      server.accounts
+        ..clear()
+        ..add(testAccount('b1', bank: 'New Test Bank'));
+      await enter(tester, 'signin-username', 'someone');
+      await enter(tester, 'signin-password', 'pw-1234');
+      await tapId(tester, 'signin-submit');
+      await tapId(tester, 'sidenav-bankaccounts');
+
+      expect(find.text('New Test Bank'), findsOneWidget);
+      expect(find.text('Old Test Bank'), findsNothing);
+    });
+
     testWidgets('lists the accounts with the last 4 digits only', (tester) async {
       await pumpApp(tester, twoAccounts());
       await tapId(tester, 'sidenav-bankaccounts');

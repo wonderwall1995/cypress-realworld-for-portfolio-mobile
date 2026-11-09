@@ -1,3 +1,26 @@
+/// A comment on a transaction. (The server sends the text and the author's id,
+/// not the author's name.)
+class TransactionComment {
+  const TransactionComment({
+    required this.id,
+    required this.content,
+    required this.userId,
+    required this.createdAt,
+  });
+
+  factory TransactionComment.fromJson(Map<String, dynamic> json) => TransactionComment(
+        id: json['id'] as String,
+        content: json['content'] as String? ?? '',
+        userId: json['userId'] as String? ?? '',
+        createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+      );
+
+  final String id;
+  final String content;
+  final String userId;
+  final DateTime? createdAt;
+}
+
 /// A payment or a request, as the server sends it.
 class Transaction {
   const Transaction({
@@ -10,12 +33,14 @@ class Transaction {
     required this.amount,
     required this.status,
     required this.requestStatus,
-    required this.likeCount,
-    required this.commentCount,
+    required this.likedByUserIds,
+    required this.comments,
   });
 
   factory Transaction.fromJson(Map<String, dynamic> json) {
     final requestStatus = json['requestStatus'] as String?;
+    final likes = (json['likes'] as List<dynamic>?) ?? const [];
+    final comments = (json['comments'] as List<dynamic>?) ?? const [];
     return Transaction(
       id: json['id'] as String,
       senderId: json['senderId'] as String,
@@ -27,8 +52,14 @@ class Transaction {
       status: json['status'] as String? ?? '',
       // A payment has no request status (missing or empty).
       requestStatus: (requestStatus == null || requestStatus.isEmpty) ? null : requestStatus,
-      likeCount: (json['likes'] as List<dynamic>?)?.length ?? 0,
-      commentCount: (json['comments'] as List<dynamic>?)?.length ?? 0,
+      // One entry per like. The same user can appear twice: the server does
+      // not stop a second like.
+      likedByUserIds: [
+        for (final like in likes) (like as Map<String, dynamic>)['userId'] as String? ?? '',
+      ],
+      comments: [
+        for (final c in comments) TransactionComment.fromJson(c as Map<String, dynamic>),
+      ],
     );
   }
 
@@ -48,8 +79,16 @@ class Transaction {
   /// `pending`, `accepted`, or `rejected`. Null for a payment.
   final String? requestStatus;
 
-  final int likeCount;
-  final int commentCount;
+  /// The user id of each like.
+  final List<String> likedByUserIds;
+
+  /// Oldest first, as the server sends them.
+  final List<TransactionComment> comments;
+
+  int get likeCount => likedByUserIds.length;
+  int get commentCount => comments.length;
+
+  bool isLikedBy(String? userId) => userId != null && likedByUserIds.contains(userId);
 
   bool get isRequest => requestStatus != null;
   bool get isPayment => !isRequest;
