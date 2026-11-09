@@ -1,36 +1,36 @@
 # Cypress Realworld For Personal Portfolio Mobile
 
-A native Android (Flutter) rewrite of the payment app from my web portfolio project. It is the **mobile counterpart** of [cypress-realworld-for-portfolio](https://github.com/wonderwall1995/cypress-realworld-for-portfolio), which is a personal fork of the [Cypress Real World App](https://github.com/cypress-io/cypress-realworld-app) by Cypress.io.
+내 웹 포트폴리오 프로젝트의 결제 앱을 **네이티브 안드로이드(Flutter)** 로 다시 만든 앱입니다. [cypress-realworld-for-portfolio](https://github.com/wonderwall1995/cypress-realworld-for-portfolio)의 **모바일 짝**이고, 그 웹 프로젝트는 Cypress.io의 [Cypress Real World App](https://github.com/cypress-io/cypress-realworld-app)을 개인적으로 포크한 것입니다.
 
-This is a **demo app for a QA portfolio**: it is built so that it can be tested well (every widget that a test touches has a stable id, using the same names as the web `data-testid`). The test design itself is done separately.
+이 앱은 **QA 포트폴리오용 데모 앱**입니다. 테스트하기 좋게 만들었습니다. 테스트가 만지는 모든 위젯에는 고정된 id가 있고, 이름은 웹의 `data-testid`와 같습니다. 테스트 설계는 따로 진행합니다.
 
-| Home | About the app |
+| 홈 | 앱 소개 |
 | :---: | --- |
-| <img src="docs/images/home.png" alt="Home screen" width="420"> | **Home screen** (the UI text is Korean).<br><br>- **새 거래** (new transaction) button, and the tabs **전체 / 친구 / 내 거래** (everyone / friends / mine)<br>- **날짜 / 금액** filter chips (date range, amount range)<br>- Each row: who paid or asked whom, the amount, likes and comments<br>- Bottom bar: Home, Notifications (with an unread number), Bank Accounts, My Account, and a **…** menu (settings, app info, sign out) |
+| <img src="docs/images/home.png" alt="홈 화면" width="420"> | **홈 화면** (화면 글자는 한국어입니다).<br><br>- **새 거래** 버튼과 **전체 / 친구 / 내 거래** 탭<br>- **날짜 / 금액** 필터 칩 (기간, 금액 범위)<br>- 각 줄: 누가 누구에게 결제하거나 요청했는지, 금액, 좋아요, 댓글<br>- 헤더 오른쪽: **© Cypress.io**(원본 저장소 링크)와 **made by Claude**<br>- 아래 막대: 홈, 알림(안 읽은 개수), 은행 계좌, 내 계좌, 그리고 **더보기** 메뉴(설정, 앱 정보, 로그아웃) |
 
-## How it relates to the web project
+## 웹 프로젝트와의 관계
 
-- **Same server.** The app talks to the same Express API and PostgreSQL database as the web app. It is a separate UI, not a WebView.
-- **Same names.** Widget ids follow the web `data-testid` names where the web has the same element.
-- **The web repository is the source of truth.** Changes needed on the server side are requested there, not made here.
+- **같은 서버.** 앱은 웹 앱과 같은 Express API, 같은 PostgreSQL 데이터베이스를 씁니다. 웹뷰가 아니라 별도의 화면(UI)입니다.
+- **같은 이름.** 웹에 같은 요소가 있으면, 위젯 id는 웹의 `data-testid` 이름을 따릅니다.
+- **기준은 웹 레포입니다.** 서버 쪽에서 고칠 것이 있으면 이 레포에서 고치지 않고 웹 레포에 요청합니다.
 
-## Features and status
+## 기능과 현재 상태
 
-**Built and checked on an Android emulator against the real server**
+**Android 에뮬레이터에서 실제 서버로 만들고 확인한 것**
 
-- Sign in (with "remember me"), sign up, sign out
-- First-time setup (create a bank account), and the bank accounts list (add, delete)
-- Transaction lists (everyone, friends, mine) with scrolling pages, pull to refresh, and date and amount filters
-- Transaction detail, new payment or request (3 steps), accept or reject a request
-- Likes, comments, and notifications with an unread number
-- My Account (balance), deposit and withdraw between a bank account and the balance, and a transfer history
-- Settings (name, email, phone number, and the default privacy of new transactions)
-- An app info page with the license notices
+- 로그인(로그인 상태 유지), 회원가입, 로그아웃
+- 처음 설정(은행 계좌 만들기), 은행 계좌 목록(추가, 삭제)
+- 거래 목록(전체, 친구, 내 거래): 스크롤로 다음 쪽 불러오기, 당겨서 새로고침, 날짜와 금액 필터
+- 거래 상세, 새 결제 또는 요청(3단계), 요청 수락 또는 거절
+- 좋아요, 댓글, 알림(안 읽은 개수 표시)
+- 내 계좌(잔액), 은행 계좌와 잔액 사이의 입금과 출금, 이체 내역
+- 설정(이름, 이메일, 전화번호, 새 거래의 기본 공개 범위)
+- 라이선스 안내가 있는 앱 정보 화면
 
-**Not done yet**
+**아직 하지 않은 것**
 
-- End-to-end tests with WebdriverIO and Appium
-- iOS and real devices have **not** been run or checked
+- WebdriverIO와 Appium을 쓰는 end-to-end 테스트
+- iOS와 실제 기기는 실행하거나 확인하지 **않았습니다**
 
 ## License Compliance
 
@@ -42,17 +42,6 @@ This app is the mobile counterpart of a personal fork of the [Cypress Real World
 - My modifications are shared under the same MIT License.
 - The software is provided "as is", without warranty of any kind; see [LICENSE](LICENSE).
 - Third-party packages keep their own licenses. They are listed inside the app (**… menu → 앱 정보 → 오픈소스 라이선스**).
-
-**한국어 안내**
-
-이 앱은 Cypress.io의 [Cypress Real World App](https://github.com/cypress-io/cypress-realworld-app)을 개인적으로 포크한 웹 프로젝트의 모바일 짝이며, [MIT 라이선스](LICENSE)를 따릅니다.
-
-- **원저작권은 모두 Cypress.io 팀에게 있습니다.** 원본 MIT 라이선스 전문과 저작권 고지(Copyright (c) 2020 Cypress.io)를 [LICENSE](LICENSE)에 그대로 유지합니다.
-- **오직 비상업적 목적**(개인 학습, 포트폴리오)으로만 사용하며, 비공식 앱입니다. Cypress.io와 제휴·보증·후원 관계가 없습니다. 앱 마켓에는 배포하지 않습니다.
-- 앱 이름의 "Cypress"는 원본 프로젝트의 출처를 밝히기 위한 것입니다. Cypress 로고와 상표 이미지는 사용하지 않습니다.
-- 제가 수정한 부분도 동일하게 MIT 라이선스로 공유합니다.
-- 소프트웨어는 어떠한 보증도 없이 "있는 그대로" 제공됩니다. 자세한 내용은 [LICENSE](LICENSE)를 참고하세요.
-- 사용한 서드파티 패키지는 각자의 라이선스를 따르며, 앱 안(**… 메뉴 → 앱 정보 → 오픈소스 라이선스**)에서 볼 수 있습니다.
 
 ## License
 
