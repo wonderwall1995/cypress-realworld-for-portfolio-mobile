@@ -7,7 +7,7 @@
     "app:analyze": "cd apps/mobile && flutter analyze",
     "app:test": "cd apps/mobile && flutter test",
     "app:run": "cd apps/mobile && flutter run --dart-define-from-file=../../.env",
-    "device:start": "start \"\" \"%LOCALAPPDATA%/Android/Sdk/emulator/emulator.exe\" -avd pixel && adb wait-for-device && adb shell \"while [ -z \\\"$(getprop sys.boot_completed)\\\" ]; do sleep 2; done\"",
+    "device:start": "powershell -NoProfile -Command \"Start-Process -WindowStyle Hidden -FilePath \\\"$env:LOCALAPPDATA/Android/Sdk/emulator/emulator.exe\\\" -ArgumentList '-avd','pixel'\" && adb start-server && adb wait-for-device && adb shell \"while [ -z \\\"$(getprop sys.boot_completed)\\\" ]; do sleep 2; done\"",
     "build": "cd apps/mobile && flutter build apk --debug --dart-define-from-file=../../.env",
     "start": "adb install -r apps/mobile/build/app/outputs/flutter-apk/app-debug.apk && adb shell am start -n io.github.wonderwall1995.cypress_realworld_for_personal_portfolio_mobile/.MainActivity",
     "device:stop": "adb shell am force-stop io.github.wonderwall1995.cypress_realworld_for_personal_portfolio_mobile & adb emu kill",
