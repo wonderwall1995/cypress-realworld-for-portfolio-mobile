@@ -139,6 +139,22 @@ void main() {
       expect(byId('transaction-create-submit-request'), findsOneWidget);
     });
 
+    testWidgets('a negative, signed, or hex amount is refused and nothing is sent', (tester) async {
+      final server = newServer();
+      await toStep2(tester, server);
+
+      for (final (text, message) in [
+        ('-10', '금액은 1달러 이상이어야 합니다.'),
+        ('0x10', '금액은 숫자로 입력하세요. (달러 단위, 소수점 없음)'),
+        ('+5', '금액은 숫자로 입력하세요. (달러 단위, 소수점 없음)'),
+      ]) {
+        await fillForm(tester, amount: text);
+        await tapId(tester, 'transaction-create-submit-payment');
+        expect(find.text(message), findsOneWidget, reason: text);
+      }
+      expect(server.calls.where((c) => c.startsWith('POST /transactions')), isEmpty);
+    });
+
     testWidgets('checks the form before sending', (tester) async {
       final server = newServer();
       await toStep2(tester, server);

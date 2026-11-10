@@ -18,6 +18,8 @@ const bankAccountDemoNotice = '진짜 자신의 계좌를 만들진 말아주세
 const routingNumberHint = '9자리 숫자';
 const accountNumberHint = '9~12자리 숫자';
 
+final _digitsOnly = RegExp(r'^[0-9]+$');
+
 typedef BankAccountSubmit = Future<void> Function({
   required String bankName,
   required String routingNumber,
@@ -122,6 +124,7 @@ class _BankAccountFormState extends State<BankAccountForm> {
                 validator: (v) {
                   final value = v?.trim() ?? '';
                   if (value.isEmpty) return '라우팅 번호를 입력하세요.';
+                  if (!_digitsOnly.hasMatch(value)) return '라우팅 번호는 숫자만 입력하세요.';
                   if (value.length != 9) return '라우팅 번호는 9자리여야 합니다.';
                   return null;
                 },
@@ -145,6 +148,7 @@ class _BankAccountFormState extends State<BankAccountForm> {
                 validator: (v) {
                   final value = v?.trim() ?? '';
                   if (value.isEmpty) return '계좌 번호를 입력하세요.';
+                  if (!_digitsOnly.hasMatch(value)) return '계좌 번호는 숫자만 입력하세요.';
                   if (value.length < 9) return '계좌 번호는 9자리 이상이어야 합니다.';
                   if (value.length > 12) return '계좌 번호는 12자리 이하여야 합니다.';
                   return null;

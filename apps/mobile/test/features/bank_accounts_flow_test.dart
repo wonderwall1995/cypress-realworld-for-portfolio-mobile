@@ -79,6 +79,26 @@ void main() {
       expect(server.calls, isNot(contains('POST /bankAccounts')));
     });
 
+    testWidgets('routing and account numbers must be digits only', (tester) async {
+      final server = FakeServer(signedIn: true);
+      await pumpApp(tester, server);
+      await tapId(tester, 'user-onboarding-next');
+
+      // The right length, but letters: this passed before the digit check.
+      await fillAccountForm(tester, routing: 'abcdefghi', number: 'abcdefghij');
+      await tapId(tester, 'bankaccount-submit');
+      expect(find.text('라우팅 번호는 숫자만 입력하세요.'), findsOneWidget);
+      expect(find.text('계좌 번호는 숫자만 입력하세요.'), findsOneWidget);
+
+      // A space or a sign in the middle is not a digit either.
+      await fillAccountForm(tester, routing: '12345 678', number: '-12345678');
+      await tapId(tester, 'bankaccount-submit');
+      expect(find.text('라우팅 번호는 숫자만 입력하세요.'), findsOneWidget);
+      expect(find.text('계좌 번호는 숫자만 입력하세요.'), findsOneWidget);
+
+      expect(server.calls, isNot(contains('POST /bankAccounts')));
+    });
+
     testWidgets('a short bank name is saved (there is no minimum length)', (tester) async {
       final server = FakeServer(signedIn: true);
       await pumpApp(tester, server);
