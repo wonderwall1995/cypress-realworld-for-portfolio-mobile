@@ -181,7 +181,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   children: [
                     Row(
                       children: [
-                        TestId('transaction-sender-avatar', child: InitialAvatar(transaction.senderName, radius: 28)),
+                        TestId('transaction-sender-avatar', child: TransactionSenderAvatar(transaction, radius: 28)),
                         const SizedBox(width: 8),
                         TestId('transaction-receiver-avatar', child: InitialAvatar(transaction.receiverName, radius: 28)),
                       ],

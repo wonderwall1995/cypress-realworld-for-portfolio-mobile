@@ -18,6 +18,29 @@ class InitialAvatar extends StatelessWidget {
   }
 }
 
+/// The avatar of the sender of a transaction: the first letter of the name, or a
+/// bank icon for an external deposit (it has no real sender, so no letter).
+class TransactionSenderAvatar extends StatelessWidget {
+  const TransactionSenderAvatar(this.transaction, {this.radius = 20, super.key});
+
+  final Transaction transaction;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!transaction.isExternalDeposit) return InitialAvatar(transaction.senderName, radius: radius);
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: Theme.of(context).colorScheme.tertiaryContainer,
+      child: Icon(
+        Icons.account_balance,
+        size: radius,
+        color: Theme.of(context).colorScheme.onTertiaryContainer,
+      ),
+    );
+  }
+}
+
 /// "Alice Test → Bob Test  [결제]". Test ids follow the web names.
 class TransactionTitleLine extends StatelessWidget {
   const TransactionTitleLine(this.transaction, {super.key});
@@ -59,7 +82,8 @@ class TransactionTitleLine extends StatelessWidget {
 }
 
 /// "+$7.00" in green for a request, "-$20.00" in red for a payment (same rule
-/// as the web, which colors by type and not by who the user is).
+/// as the web, which colors by type and not by who the user is). An external
+/// deposit is money coming in, so it is "+" and green.
 class TransactionAmountText extends StatelessWidget {
   const TransactionAmountText(this.transaction, {this.large = false, super.key});
 
@@ -69,12 +93,13 @@ class TransactionAmountText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = large ? Theme.of(context).textTheme.headlineSmall : Theme.of(context).textTheme.titleMedium;
+    final incoming = transaction.isRequest || transaction.isExternalDeposit;
     return TestId(
       'transaction-amount-${transaction.id}',
       child: Text(
-        '${transaction.isRequest ? '+' : '-'}${formatUsd(transaction.amount)}',
+        '${incoming ? '+' : '-'}${formatUsd(transaction.amount)}',
         style: style?.copyWith(
-          color: transaction.isRequest ? Colors.green.shade700 : Colors.red.shade700,
+          color: incoming ? Colors.green.shade700 : Colors.red.shade700,
           fontWeight: FontWeight.w600,
         ),
       ),

@@ -21,7 +21,11 @@ class TransactionComment {
   final DateTime? createdAt;
 }
 
-/// A payment or a request, as the server sends it.
+/// The sender of an "외부 입금" (a deposit into a bank account). The server makes
+/// one transaction for each deposit; `senderName` is already "외부 입금".
+const externalDepositSenderId = 'external-deposit';
+
+/// A payment, a request, or an external deposit, as the server sends it.
 class Transaction {
   const Transaction({
     required this.id,
@@ -90,6 +94,10 @@ class Transaction {
 
   bool isLikedBy(String? userId) => userId != null && likedByUserIds.contains(userId);
 
+  /// A deposit the user made into one of their own bank accounts. Money came in
+  /// from outside, so there is no real sender.
+  bool get isExternalDeposit => senderId == externalDepositSenderId;
+
   bool get isRequest => requestStatus != null;
   bool get isPayment => !isRequest;
   bool get isAcceptedRequest => requestStatus == 'accepted';
@@ -99,12 +107,14 @@ class Transaction {
   /// The short word after the names. Same rule as the web:
   /// payment is "paid", an accepted request is "charged", other requests are "requested".
   String get actionLabel {
+    if (isExternalDeposit) return '입금';
     if (isPayment) return '결제';
     return isAcceptedRequest ? '청구' : '요청';
   }
 
   /// Where the transaction stands, for the detail screen.
   String get statusLabel {
+    if (isExternalDeposit) return status == 'complete' ? '입금 완료' : '처리 중';
     if (isPayment) return status == 'complete' ? '결제 완료' : '처리 중';
     if (isAcceptedRequest) return '수락됨';
     if (isRejectedRequest) return '거절됨';

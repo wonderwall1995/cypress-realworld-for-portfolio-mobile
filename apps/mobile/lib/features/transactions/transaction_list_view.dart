@@ -194,7 +194,7 @@ class _TransactionTile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              InitialAvatar(transaction.senderName),
+              TransactionSenderAvatar(transaction),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

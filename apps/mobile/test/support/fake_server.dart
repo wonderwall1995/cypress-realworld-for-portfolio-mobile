@@ -390,6 +390,20 @@ class FakeServer {
       );
       if (type == 'deposit') {
         account.first['balance'] = after;
+        // Like the newer server: a deposit also makes an "외부 입금" transaction. It is
+        // in everyone's list (only the user's own deposits) and in the user's own,
+        // never in the friends' list.
+        final deposit = testTransaction(
+          'dep${_nextId++}',
+          sender: '외부 입금',
+          receiver: 'Kim Ada',
+          description: '외부 입금',
+          amount: cents,
+          senderId: 'external-deposit',
+          receiverId: 'u1',
+        );
+        everyone.insert(0, deposit);
+        mine.insert(0, deposit);
       } else {
         balance = after;
       }
