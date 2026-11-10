@@ -71,6 +71,7 @@ void main() {
       lastName: 'Kim',
       username: 'ada',
       password: 'abcd',
+      phoneNumber: '010-1234-5678',
     );
     expect(seen.uri.toString(), 'http://api.test/api/users');
     expect(seen.data, {
@@ -78,6 +79,7 @@ void main() {
       'lastName': 'Kim',
       'username': 'ada',
       'password': 'abcd',
+      'phoneNumber': '010-1234-5678',
     });
   });
 
@@ -143,14 +145,12 @@ void main() {
     });
     final account = await client.createBankAccount(
       bankName: 'Test Bank One',
-      routingNumber: '123456789',
       accountNumber: '987654321',
     );
     expect(account['id'], 'b9');
     expect(seen.method, 'POST');
     expect(seen.data, {
       'bankName': 'Test Bank One',
-      'routingNumber': '123456789',
       'accountNumber': '987654321',
     });
   });

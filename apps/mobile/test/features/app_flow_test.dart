@@ -108,9 +108,10 @@ void main() {
 
   group('sign up', () {
     Future<void> fillValid(WidgetTester tester) async {
-      await enter(tester, 'signup-first-name', 'Ada');
       await enter(tester, 'signup-last-name', 'Kim');
+      await enter(tester, 'signup-first-name', 'Ada');
       await enter(tester, 'signup-username', 'ada');
+      await enter(tester, 'signup-phone-number', '010-1234-5678');
       await enter(tester, 'signup-password', 'abcd');
       await enter(tester, 'signup-confirmPassword', 'abcd');
     }
@@ -121,9 +122,10 @@ void main() {
 
       for (final id in [
         'signup-title',
-        'signup-first-name',
         'signup-last-name',
+        'signup-first-name',
         'signup-username',
+        'signup-phone-number',
         'signup-password',
         'signup-confirmPassword',
         'signup-submit',
@@ -141,6 +143,7 @@ void main() {
       expect(find.text('이름을 입력하세요.'), findsOneWidget);
       expect(find.text('성을 입력하세요.'), findsOneWidget);
       expect(find.text('아이디를 입력하세요.'), findsOneWidget);
+      expect(find.text('연락처를 입력하세요.'), findsOneWidget);
 
       await fillValid(tester);
       await enter(tester, 'signup-confirmPassword', 'abce');
@@ -148,6 +151,84 @@ void main() {
 
       expect(find.text('비밀번호가 일치하지 않습니다.'), findsOneWidget);
       expect(server.calls, ['GET /checkAuth']);
+    });
+
+    testWidgets('the order is 성, 이름, 아이디, 연락처, 비밀번호, 비밀번호 확인', (tester) async {
+      await pumpApp(tester, serverWithAccount(signedIn: false));
+      await tapId(tester, 'signup');
+
+      final ids = [
+        'signup-last-name',
+        'signup-first-name',
+        'signup-username',
+        'signup-phone-number',
+        'signup-password',
+        'signup-confirmPassword',
+      ];
+      final tops = [for (final id in ids) tester.getRect(byId(id)).top];
+      expect(tops, [...tops]..sort());
+      expect(tops.toSet().length, ids.length);
+    });
+
+    testWidgets('the phone number is required and checked like the server does', (tester) async {
+      final server = serverWithAccount(signedIn: false);
+      await pumpApp(tester, server);
+      await tapId(tester, 'signup');
+
+      await fillValid(tester);
+      await enter(tester, 'signup-phone-number', '');
+      await tapId(tester, 'signup-submit');
+      expect(find.text('연락처를 입력하세요.'), findsOneWidget);
+
+      for (final bad in ['12', 'abc', '010-12', '+', '1234567890123456789012']) {
+        await enter(tester, 'signup-phone-number', bad);
+        await tapId(tester, 'signup-submit');
+        expect(find.text('연락처가 올바르지 않습니다. (예: 010-1234-5678)'), findsOneWidget, reason: bad);
+      }
+      expect(server.calls, isNot(contains('POST /users')));
+    });
+
+    testWidgets('a number with a country code or brackets is sent as typed', (tester) async {
+      final server = serverWithAccount(signedIn: false);
+      await pumpApp(tester, server);
+      await tapId(tester, 'signup');
+
+      await fillValid(tester);
+      await enter(tester, 'signup-phone-number', '+82 10-1234-5678');
+      await tapId(tester, 'signup-submit');
+
+      expect(server.bodies['POST /users'], containsPair('phoneNumber', '+82 10-1234-5678'));
+    });
+
+    testWidgets('the phone field hints not to enter a real number', (tester) async {
+      await pumpApp(tester, serverWithAccount(signedIn: false));
+      await tapId(tester, 'signup');
+
+      final field = tester.widget<TextField>(find.descendant(of: byId('signup-phone-number'), matching: find.byType(TextField)));
+      expect(field.decoration!.labelText, '연락처');
+      expect(field.decoration!.hintText, '데모 앱입니다. 진짜 연락처는 넣지 마세요!');
+      expect(field.decoration!.floatingLabelBehavior, FloatingLabelBehavior.always);
+    });
+
+    testWidgets('the last name field is labeled 성 and the first name field 이름', (tester) async {
+      await pumpApp(tester, serverWithAccount(signedIn: false));
+      await tapId(tester, 'signup');
+
+      String? label(String id) => tester
+          .widget<TextField>(find.descendant(of: byId(id), matching: find.byType(TextField)))
+          .decoration!
+          .labelText;
+      expect(label('signup-last-name'), '성');
+      expect(label('signup-first-name'), '이름');
+    });
+
+    testWidgets('on a phone the fields keep 40 on each side', (tester) async {
+      await pumpApp(tester, serverWithAccount(signedIn: false), size: const Size(400, 1600));
+      await tapId(tester, 'signup');
+
+      final rect = tester.getRect(byId('signup-username'));
+      expect(rect.left, 40);
+      expect(400 - rect.right, 40);
     });
 
     testWidgets('success returns to sign-in with a message', (tester) async {
@@ -163,6 +244,7 @@ void main() {
         'lastName': 'Kim',
         'username': 'ada',
         'password': 'abcd',
+        'phoneNumber': '010-1234-5678',
       });
       expect(byId('signup-title'), findsNothing);
       expect(byId('signin-submit'), findsOneWidget);
@@ -188,7 +270,7 @@ void main() {
 
       await tapId(tester, 'sidenav-more');
 
-      expect(find.text('Ada Kim'), findsOneWidget);
+      expect(find.text('Kim Ada'), findsOneWidget);
       expect(find.text('@tester'), findsOneWidget);
       // The ... button opens a menu. It does not change the tab.
       expect(byId('nav-transaction-tabs'), findsOneWidget);

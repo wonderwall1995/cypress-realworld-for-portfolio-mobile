@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../about/original_project_link.dart';
 import '../../core/api_client.dart';
 import '../../core/session.dart';
 import '../../core/test_id.dart';
@@ -83,7 +84,9 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.headlineMedium,
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 4),
+                    const OriginalProjectLink(id: 'signin-original-link'),
+                    const SizedBox(height: 20),
                     if (error != null) ...[
                       FormErrorBanner(id: 'signin-error', message: error),
                       const SizedBox(height: 16),

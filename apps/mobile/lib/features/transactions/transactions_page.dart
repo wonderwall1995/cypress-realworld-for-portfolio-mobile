@@ -1,6 +1,5 @@
 import '../../core/header_credit.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../core/test_id.dart';
 import 'transaction_feed_controller.dart';
@@ -22,33 +21,14 @@ class TransactionsPage extends StatelessWidget {
           actions: const [HeaderCredit()],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(kTextTabBarHeight),
-            child: Row(
-              children: [
-                const SizedBox(width: 8),
-                TestId(
-                  'nav-top-new-transaction',
-                  child: FilledButton.tonalIcon(
-                    onPressed: () => context.push('/transaction/new'),
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('새 거래'),
-                    style: FilledButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: TestId(
-                    'nav-transaction-tabs',
-                    child: TabBar(
-                      tabs: [
-                        for (final feed in TransactionFeed.values)
-                          TestId(feed.tabId, child: Tab(text: feed.label)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+            child: TestId(
+              'nav-transaction-tabs',
+              child: TabBar(
+                tabs: [
+                  for (final feed in TransactionFeed.values)
+                    TestId(feed.tabId, child: Tab(text: feed.label)),
+                ],
+              ),
             ),
           ),
         ),

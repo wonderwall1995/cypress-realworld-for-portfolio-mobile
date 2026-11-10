@@ -23,14 +23,12 @@ class BankAccountNewPage extends ConsumerWidget {
               child: BankAccountForm(
                 onSubmit: ({
                   required bankName,
-                  required routingNumber,
                   required accountNumber,
                 }) async {
                   final messenger = ScaffoldMessenger.of(context);
                   final router = GoRouter.of(context);
                   await ref.read(bankAccountsProvider.notifier).create(
                         bankName: bankName,
-                        routingNumber: routingNumber,
                         accountNumber: accountNumber,
                       );
                   messenger.showSnackBar(

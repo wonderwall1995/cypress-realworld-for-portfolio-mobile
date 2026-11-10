@@ -130,7 +130,7 @@ class _BankAccountTile extends ConsumerWidget {
       child: ListTile(
         leading: const Icon(Icons.account_balance_outlined),
         title: Text(account.bankName),
-        subtitle: Text('계좌 번호 ${account.maskedAccountNumber}'),
+        subtitle: Text(account.describe),
         trailing: TestId(
           'bankaccount-delete',
           child: TextButton(

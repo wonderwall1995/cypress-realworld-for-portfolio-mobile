@@ -1,3 +1,5 @@
+import '../../../core/person_name.dart';
+
 /// Another user, as shown in the list when choosing who to pay or ask.
 class UserSummary {
   const UserSummary({
@@ -19,5 +21,5 @@ class UserSummary {
   final String lastName;
   final String username;
 
-  String get fullName => '$firstName $lastName'.trim();
+  String get fullName => koreanFullName(firstName: firstName, lastName: lastName);
 }

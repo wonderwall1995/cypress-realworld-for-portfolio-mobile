@@ -16,12 +16,13 @@ class BankAccountsController extends AsyncNotifier<List<BankAccount>> {
     return _fetch();
   }
 
-  /// The server keeps deleted accounts (soft delete) and returns them with
-  /// `isDeleted: true`. The app only works with accounts in use.
+  /// A deleted account stays on the server (soft delete). The newer server marks it
+  /// `visible: false` and does not return it; an older one returned it with
+  /// `isDeleted: true`. The app only works with accounts in use, so it hides both.
   Future<List<BankAccount>> _fetch() async {
     final raw = await ref.read(apiClientProvider).getBankAccounts();
     return raw
-        .where((json) => json['isDeleted'] != true)
+        .where((json) => json['isDeleted'] != true && json['visible'] != false)
         .map(BankAccount.fromJson)
         .toList();
   }
@@ -34,12 +35,10 @@ class BankAccountsController extends AsyncNotifier<List<BankAccount>> {
   /// Throws [ApiException] when the server refuses.
   Future<void> create({
     required String bankName,
-    required String routingNumber,
     required String accountNumber,
   }) async {
     final json = await ref.read(apiClientProvider).createBankAccount(
           bankName: bankName,
-          routingNumber: routingNumber,
           accountNumber: accountNumber,
         );
     state = AsyncData([...?state.value, BankAccount.fromJson(json)]);

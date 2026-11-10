@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/test_id.dart';
+import '../settings/phone_rule.dart';
 import 'auth_widgets.dart';
 
 class SignUpPage extends ConsumerStatefulWidget {
@@ -19,6 +20,7 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
   final _firstName = TextEditingController();
   final _lastName = TextEditingController();
   final _username = TextEditingController();
+  final _phone = TextEditingController();
   final _password = TextEditingController();
   final _confirm = TextEditingController();
   bool _busy = false;
@@ -29,6 +31,7 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
     _firstName.dispose();
     _lastName.dispose();
     _username.dispose();
+    _phone.dispose();
     _password.dispose();
     _confirm.dispose();
     super.dispose();
@@ -52,6 +55,7 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
             lastName: _lastName.text.trim(),
             username: _username.text.trim(),
             password: _password.text,
+            phoneNumber: _phone.text.trim(),
           );
       messenger.showSnackBar(
         const SnackBar(
@@ -78,7 +82,7 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: Form(
@@ -101,19 +105,6 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                       const SizedBox(height: 16),
                     ],
                     TestId(
-                      'signup-first-name',
-                      child: TextFormField(
-                        controller: _firstName,
-                        decoration: const InputDecoration(
-                          labelText: '이름',
-                          border: OutlineInputBorder(),
-                        ),
-                        textInputAction: TextInputAction.next,
-                        validator: (v) => _required(v, '이름을 입력하세요.'),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TestId(
                       'signup-last-name',
                       child: TextFormField(
                         controller: _lastName,
@@ -123,6 +114,19 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                         ),
                         textInputAction: TextInputAction.next,
                         validator: (v) => _required(v, '성을 입력하세요.'),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TestId(
+                      'signup-first-name',
+                      child: TextFormField(
+                        controller: _firstName,
+                        decoration: const InputDecoration(
+                          labelText: '이름',
+                          border: OutlineInputBorder(),
+                        ),
+                        textInputAction: TextInputAction.next,
+                        validator: (v) => _required(v, '이름을 입력하세요.'),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -137,6 +141,22 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                         textInputAction: TextInputAction.next,
                         autocorrect: false,
                         validator: (v) => _required(v, '아이디를 입력하세요.'),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TestId(
+                      'signup-phone-number',
+                      child: TextFormField(
+                        controller: _phone,
+                        decoration: const InputDecoration(
+                          labelText: '연락처',
+                          hintText: '데모 앱입니다. 진짜 연락처는 넣지 마세요!',
+                          floatingLabelBehavior: FloatingLabelBehavior.always,
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.phone,
+                        textInputAction: TextInputAction.next,
+                        validator: (v) => validatePhoneNumber(v, noun: '연락처'),
                       ),
                     ),
                     const SizedBox(height: 16),
