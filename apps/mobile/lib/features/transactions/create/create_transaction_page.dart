@@ -385,7 +385,9 @@ class _CompleteStep extends ConsumerWidget {
               TestId(
                 'new-transaction-return-to-transactions',
                 child: FilledButton(
-                  onPressed: () => context.pop(),
+                  // The home list, wherever the user came from (the 이체 button on
+                  // 내 계좌 or the empty list).
+                  onPressed: () => context.go('/'),
                   child: const Text('거래 목록으로 돌아가기'),
                 ),
               ),

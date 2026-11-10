@@ -47,12 +47,10 @@ class OnboardingPage extends ConsumerWidget {
                       OnboardingStep.createAccount => BankAccountForm(
                           onSubmit: ({
                             required bankName,
-                            required routingNumber,
                             required accountNumber,
                           }) async {
                             await ref.read(bankAccountsProvider.notifier).create(
                                   bankName: bankName,
-                                  routingNumber: routingNumber,
                                   accountNumber: accountNumber,
                                 );
                             ref.read(onboardingProvider.notifier).next();

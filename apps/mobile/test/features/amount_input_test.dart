@@ -4,11 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   const needNumber = '금액은 숫자로 입력하세요. (달러 단위, 소수점 없음)';
   const atLeastOne = '금액은 1달러 이상이어야 합니다.';
-  const tooBig = '금액은 9999999달러 이하여야 합니다.';
+  const tooBig = '금액은 21,474,836달러 이하여야 합니다.';
 
   group('validateDollars', () {
-    test('whole dollars from 1 to 9999999 are fine', () {
-      for (final ok in ['1', '5', ' 7 ', '007', '9999999']) {
+    test('whole dollars from 1 to 21,474,836 are fine', () {
+      for (final ok in ['1', '5', ' 7 ', '007', '9999999', '21474836']) {
         expect(validateDollars(ok), isNull, reason: ok);
       }
     });
@@ -32,7 +32,8 @@ void main() {
     });
 
     test('too big is refused, also when it does not fit in a number', () {
-      expect(validateDollars('10000000'), tooBig);
+      expect(validateDollars('21474837'), tooBig);
+      expect(validateDollars('10000000'), isNull); // the old limit of the app is gone
       expect(validateDollars('99999999999999999999'), tooBig);
     });
   });

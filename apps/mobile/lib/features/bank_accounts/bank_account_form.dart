@@ -11,18 +11,16 @@ String bankAccountErrorMessage(ApiException e) {
 }
 
 /// Shown above the form: the user must not type a real bank account.
-const bankAccountDemoNotice = '진짜 자신의 계좌를 만들진 말아주세요! 이건 데모 웹입니다.';
+const bankAccountDemoNotice = '진짜 자신의 계좌를 만들진 말아주세요! 이건 데모 앱입니다.';
 
-/// The number rules, shown as the hint inside the fields. The checks below use
+/// The number rule, shown as the hint inside the field. The check below uses
 /// the same numbers.
-const routingNumberHint = '9자리 숫자';
 const accountNumberHint = '9~12자리 숫자';
 
 final _digitsOnly = RegExp(r'^[0-9]+$');
 
 typedef BankAccountSubmit = Future<void> Function({
   required String bankName,
-  required String routingNumber,
   required String accountNumber,
 });
 
@@ -41,7 +39,6 @@ class BankAccountForm extends StatefulWidget {
 class _BankAccountFormState extends State<BankAccountForm> {
   final _formKey = GlobalKey<FormState>();
   final _bankName = TextEditingController();
-  final _routing = TextEditingController();
   final _account = TextEditingController();
   bool _busy = false;
   String? _error;
@@ -49,7 +46,6 @@ class _BankAccountFormState extends State<BankAccountForm> {
   @override
   void dispose() {
     _bankName.dispose();
-    _routing.dispose();
     _account.dispose();
     super.dispose();
   }
@@ -63,7 +59,6 @@ class _BankAccountFormState extends State<BankAccountForm> {
     try {
       await widget.onSubmit(
         bankName: _bankName.text.trim(),
-        routingNumber: _routing.text.trim(),
         accountNumber: _account.text.trim(),
       );
     } on ApiException catch (e) {
@@ -103,29 +98,6 @@ class _BankAccountFormState extends State<BankAccountForm> {
                 validator: (v) {
                   final value = v?.trim() ?? '';
                   if (value.isEmpty) return '은행 이름을 입력하세요.';
-                  return null;
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-            TestId(
-              'bankaccount-routingNumber-input',
-              child: TextFormField(
-                controller: _routing,
-                decoration: const InputDecoration(
-                  labelText: '라우팅 번호',
-                  hintText: routingNumberHint,
-                  floatingLabelBehavior: FloatingLabelBehavior.always,
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.next,
-                inputFormatters: [LengthLimitingTextInputFormatter(20)],
-                validator: (v) {
-                  final value = v?.trim() ?? '';
-                  if (value.isEmpty) return '라우팅 번호를 입력하세요.';
-                  if (!_digitsOnly.hasMatch(value)) return '라우팅 번호는 숫자만 입력하세요.';
-                  if (value.length != 9) return '라우팅 번호는 9자리여야 합니다.';
                   return null;
                 },
               ),

@@ -16,13 +16,14 @@ Map<String, dynamic> testAccount(
   String bank = 'Test Bank One',
   String number = '123456789',
   bool isDeleted = false,
+  int? balance,
 }) =>
     {
       'id': id,
       'bankName': bank,
-      'routingNumber': '987654321',
       'accountNumber': number,
       'isDeleted': isDeleted,
+      if (balance != null) 'balance': balance,
     };
 
 /// A transaction as the server sends it. [amount] is in cents.
@@ -164,6 +165,7 @@ class FakeServer {
   /// Other users for the "새 거래" list. `GET /users/search?q=` filters them.
   final List<Map<String, dynamic>> users = [];
   final List<String> userQueries = [];
+
   bool failUsers = false;
 
   /// The signed-in user's deposits and withdrawals.
@@ -243,9 +245,17 @@ class FakeServer {
         signedIn = true;
         return jsonBody(200, {'user': user});
       case 'POST /users':
-        return failSignUp
-            ? jsonBody(400, {'error': 'bad'})
-            : jsonBody(201, {'user': testUser});
+        if (failSignUp) return jsonBody(400, {'error': 'bad'});
+        // Like the real server: a phone number is required at sign-up.
+        final phone = (o.data as Map<String, dynamic>)['phoneNumber'];
+        if (phone is! String || !RegExp(r'^\+?\d[\d\s()-]{5,18}\d$').hasMatch(phone.trim())) {
+          return jsonBody(422, {
+            'errors': [
+              {'msg': 'phoneNumber is required and must be a valid phone number', 'param': 'phoneNumber', 'location': 'body'},
+            ],
+          });
+        }
+        return jsonBody(201, {'user': testUser});
       case 'GET /users':
         userQueries.add('');
         return failUsers
@@ -289,7 +299,7 @@ class FakeServer {
       case 'POST /bankAccounts':
         if (failAccountCreate) return jsonBody(400, {'error': 'bad'});
         final body = o.data as Map<String, dynamic>;
-        final account = {'id': 'new${_nextId++}', ...body, 'isDeleted': false};
+        final account = {'id': 'new${_nextId++}', ...body, 'isDeleted': false, 'balance': 0};
         accounts.add(account);
         return jsonBody(200, {'account': account});
     }
@@ -300,7 +310,7 @@ class FakeServer {
       feedRequests.add('${o.path}:$page');
       feedQueries.add({...o.queryParameters});
       final hasFilter = o.queryParameters.keys
-          .any((k) => k.startsWith('dateRange') || k.startsWith('amount'));
+          .any((k) => k.startsWith('dateRange') || k.startsWith('deposit') || k.startsWith('withdrawal'));
       final source = hasFilter ? filtered : feed;
       if (failPages.contains(page)) return jsonBody(500, {'error': 'boom'});
       final start = (page - 1) * limit;
@@ -358,7 +368,11 @@ class FakeServer {
         return jsonBody(400, {'error': 'this bank account was deleted'});
       }
       final cents = amount * 100;
-      final after = type == 'deposit' ? balance + cents : balance - cents;
+      // Like the newer server: a deposit goes into the bank account (its own
+      // balance); a withdrawal comes out of the balance of the user.
+      final held = account.first['balance'] as int? ?? 0;
+      final before = type == 'deposit' ? held : balance;
+      final after = type == 'deposit' ? before + cents : before - cents;
       if (type == 'withdrawal' && after < 0) {
         return jsonBody(400, {'error': 'not enough balance'});
       }
@@ -370,11 +384,15 @@ class FakeServer {
         type as String,
         cents,
         source: body['bankAccountId'] as String,
-        balanceBefore: balance,
+        balanceBefore: before,
         balanceAfter: after,
         createdAt: DateTime.now().toUtc().toIso8601String(),
       );
-      balance = after;
+      if (type == 'deposit') {
+        account.first['balance'] = after;
+      } else {
+        balance = after;
+      }
       transfers.add(transfer);
       return jsonBody(201, {'transfer': transfer});
     }

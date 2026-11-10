@@ -1,3 +1,4 @@
+import '../../core/person_name.dart';
 import '../../core/header_credit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,12 +8,14 @@ import '../../core/session.dart';
 import '../../core/test_id.dart';
 import '../bank_accounts/bank_accounts_controller.dart';
 import '../bank_transfers/bank_transfer.dart';
+import '../bank_transfers/deposit_dialog.dart';
 import '../bank_transfers/bank_transfers_controller.dart';
 import '../transactions/transaction.dart';
 import '../transactions/transaction_widgets.dart';
 
-/// The "내 계좌" tab: who the user is, the balance, [입금] and [출금], and the
-/// history of deposits and withdrawals. Pull down to load again.
+/// The "내 계좌" tab: who the user is, the balance, [입금] (a dialog) and [이체]
+/// (the new transaction screen), and the history of deposits and withdrawals.
+/// Pull down to load again.
 class MyAccountPage extends ConsumerWidget {
   const MyAccountPage({super.key});
 
@@ -26,7 +29,10 @@ class MyAccountPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(sessionProvider.select((s) => s.user));
-    final fullName = '${user?['firstName'] ?? ''} ${user?['lastName'] ?? ''}'.trim();
+    final fullName = koreanFullName(
+      firstName: user?['firstName'] as String?,
+      lastName: user?['lastName'] as String?,
+    );
     final username = user?['username'] as String?;
     final balance = (user?['balance'] as num?)?.toInt() ?? 0;
     final theme = Theme.of(context);
@@ -80,7 +86,7 @@ class MyAccountPage extends ConsumerWidget {
                           child: TestId(
                             'my-account-deposit',
                             child: FilledButton(
-                              onPressed: () => context.push('/bank-transfer/deposit'),
+                              onPressed: () => showDepositDialog(context),
                               child: const Text('입금'),
                             ),
                           ),
@@ -88,10 +94,10 @@ class MyAccountPage extends ConsumerWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: TestId(
-                            'my-account-withdraw',
+                            'my-account-transfer',
                             child: OutlinedButton(
-                              onPressed: () => context.push('/bank-transfer/withdrawal'),
-                              child: const Text('출금'),
+                              onPressed: () => context.push('/transaction/new'),
+                              child: const Text('이체'),
                             ),
                           ),
                         ),
@@ -102,7 +108,7 @@ class MyAccountPage extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 24),
-            Text('이체 내역', style: theme.textTheme.titleMedium),
+            Text('입출금 내역', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
             const _TransferHistory(),
           ],
@@ -129,7 +135,7 @@ class _TransferHistory extends ConsumerWidget {
         'bank-transfers-load-error',
         child: Column(
           children: [
-            const Text('이체 내역을 불러오지 못했습니다.'),
+            const Text('입출금 내역을 불러오지 못했습니다.'),
             const SizedBox(height: 12),
             OutlinedButton(
               onPressed: () => ref.read(bankTransfersProvider.notifier).retry(),
@@ -142,7 +148,7 @@ class _TransferHistory extends ConsumerWidget {
           ? const Padding(
               padding: EdgeInsets.all(16),
               child: Center(
-                child: TestId('bank-transfers-empty', child: Text('이체 내역이 없습니다.')),
+                child: TestId('bank-transfers-empty', child: Text('입출금 내역이 없습니다.')),
               ),
             )
           : TestId(
@@ -189,7 +195,8 @@ class _TransferTile extends ConsumerWidget {
         leading: Icon(transfer.isDeposit ? Icons.south_west : Icons.north_east),
         title: Text('${transfer.label} · $accountText'),
         subtitle: Text(
-          '${_time(transfer.createdAt)}  ·  잔액 ${formatUsd(transfer.balanceBefore)} → ${formatUsd(transfer.balanceAfter)}',
+          // A deposit changes the bank account's balance, a withdrawal the balance of 내 계좌.
+          '${_time(transfer.createdAt)}  ·  ${transfer.isDeposit ? '계좌 잔액' : '잔액'} ${formatUsd(transfer.balanceBefore)} → ${formatUsd(transfer.balanceAfter)}',
         ),
         trailing: TestId(
           'bank-transfer-amount-${transfer.id}',

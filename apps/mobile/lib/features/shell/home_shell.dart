@@ -1,3 +1,4 @@
+import '../../core/person_name.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -122,7 +123,10 @@ class HomeShell extends ConsumerWidget {
 
   void _openMoreMenu(BuildContext context, WidgetRef ref) {
     final user = ref.read(sessionProvider).user;
-    final fullName = '${user?['firstName'] ?? ''} ${user?['lastName'] ?? ''}'.trim();
+    final fullName = koreanFullName(
+      firstName: user?['firstName'] as String?,
+      lastName: user?['lastName'] as String?,
+    );
     final username = user?['username'] as String?;
 
     showModalBottomSheet<void>(

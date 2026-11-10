@@ -1,15 +1,19 @@
-/// The phone number rule of the web settings form (`phoneRegExp` in
-/// `src/components/UserSettingsForm.tsx` of the web repo), copied as it is.
+/// The phone number rule of the server (`PHONE_NUMBER_PATTERN` in the web
+/// repo's shared package), the same for sign-up and for the settings screen.
 ///
-/// It accepts digits with spaces or hyphens, for example `010-1234-5678`. It
-/// does NOT accept a country code or brackets, for example `+82 10 1234 5678`
-/// or `(02) 1234-5678`. The app follows the web on purpose.
-final RegExp webPhoneNumberPattern = RegExp(r'^((\\+[1-9]{1,4}[ \\-]*)|(\\([0-9]{2,3}\\)[ \\-]*)|([0-9]{2,4})[ \\-]*)*?[0-9]{3,4}?[ \\-]*[0-9]{3,4}?$');
+/// Digits, spaces, hyphens and brackets, with an optional leading "+". From 7
+/// to 20 characters; it starts and ends with a digit. Examples that pass:
+/// `010-1234-5678`, `+82 10-1234-5678`, `(02) 123-4567`.
+final RegExp serverPhoneNumberPattern = RegExp(r'^\+?\d[\d\s()-]{5,18}\d$');
 
 /// Returns a Korean message, or null when the number is fine.
-String? validatePhoneNumber(String? value) {
+///
+/// [noun] is the word the screen uses: "전화번호" in settings, "연락처" in sign-up.
+String? validatePhoneNumber(String? value, {String noun = '전화번호'}) {
   final text = value?.trim() ?? '';
-  if (text.isEmpty) return '전화번호를 입력하세요.';
-  if (!webPhoneNumberPattern.hasMatch(text)) return '전화번호가 올바르지 않습니다.';
+  if (text.isEmpty) return '$noun를 입력하세요.';
+  if (!serverPhoneNumberPattern.hasMatch(text)) {
+    return '$noun가 올바르지 않습니다. (예: 010-1234-5678)';
+  }
   return null;
 }

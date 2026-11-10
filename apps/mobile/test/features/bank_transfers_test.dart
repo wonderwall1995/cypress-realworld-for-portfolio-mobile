@@ -24,12 +24,15 @@ Finder balance(String text) =>
 
 void main() {
   group('the 내 계좌 tab', () {
-    testWidgets('has 입금 and 출금 under the balance', (tester) async {
+    testWidgets('has 입금 and 이체 under the balance, and no 출금 button', (tester) async {
       await pumpApp(tester, newServer());
       await openMyAccount(tester);
 
       expect(byId('my-account-deposit'), findsOneWidget);
-      expect(byId('my-account-withdraw'), findsOneWidget);
+      expect(byId('my-account-transfer'), findsOneWidget);
+      expect(byId('my-account-withdraw'), findsNothing);
+      expect(find.text('출금'), findsNothing);
+      expect(tester.getTopLeft(byId('my-account-transfer')).dy, tester.getTopLeft(byId('my-account-deposit')).dy);
       final balanceBottom = tester.getBottomLeft(byId('sidenav-user-balance')).dy;
       expect(tester.getTopLeft(byId('my-account-deposit')).dy, greaterThan(balanceBottom));
     });
@@ -39,7 +42,9 @@ void main() {
       await openMyAccount(tester);
 
       expect(byId('bank-transfers-empty'), findsOneWidget);
-      expect(find.text('이체 내역이 없습니다.'), findsOneWidget);
+      expect(find.text('입출금 내역이 없습니다.'), findsOneWidget);
+      expect(find.text('입출금 내역'), findsOneWidget);
+      expect(find.text('이체 내역'), findsNothing);
     });
 
     testWidgets('lists the transfers, newest first, with names, signs and balances', (tester) async {
@@ -122,25 +127,41 @@ void main() {
     });
   });
 
-  group('the form', () {
-    testWidgets('입금 opens a screen with the account and the amount', (tester) async {
+  group('the 입금 dialog', () {
+    testWidgets('입금 opens a dialog over the tab with the account and the amount', (tester) async {
       await pumpApp(tester, newServer());
       await openForm(tester, 'my-account-deposit');
 
-      expect(find.text('입금'), findsWidgets);
-      expect(find.text('은행 계좌에서 내 계좌로 옮깁니다.'), findsOneWidget);
+      expect(byId('bank-transfer-dialog'), findsOneWidget);
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.text('선택한 내 은행 계좌에 입금합니다.'), findsOneWidget);
       expect(byId('bank-transfer-account-b1'), findsOneWidget);
       expect(byId('bank-transfer-amount-input'), findsOneWidget);
       expect(find.descendant(of: byId('bank-transfer-submit'), matching: find.text('입금하기')), findsOneWidget);
-      expect(byId('sidenav-home'), findsNothing); // a full screen
+      // A dialog, not a screen: the tab bar is still there behind it.
+      expect(byId('sidenav-home'), findsOneWidget);
     });
 
-    testWidgets('출금 says the other direction and has its own button text', (tester) async {
-      await pumpApp(tester, newServer());
-      await openForm(tester, 'my-account-withdraw');
+    testWidgets('취소 closes the dialog and sends nothing', (tester) async {
+      final server = newServer();
+      await pumpApp(tester, server);
+      await openForm(tester, 'my-account-deposit');
+      await enter(tester, 'bank-transfer-amount-input', '5');
 
-      expect(find.text('내 계좌에서 은행 계좌로 옮깁니다.'), findsOneWidget);
-      expect(find.descendant(of: byId('bank-transfer-submit'), matching: find.text('출금하기')), findsOneWidget);
+      await tapId(tester, 'bank-transfer-cancel');
+
+      expect(byId('bank-transfer-dialog'), findsNothing);
+      expect(server.calls, isNot(contains('POST /bankTransfers')));
+      expect(balance('\$100.00'), findsOneWidget);
+    });
+
+    testWidgets('it has no 출금 wording', (tester) async {
+      await pumpApp(tester, newServer());
+      await openForm(tester, 'my-account-deposit');
+
+      expect(find.text('출금하기'), findsNothing);
+      expect(find.text('내 계좌에서 은행 계좌로 옮깁니다.'), findsNothing);
+      expect(find.text('내 은행 계좌에서 내 계좌로 옮깁니다.'), findsNothing);
     });
 
     testWidgets('with one account, it is chosen already', (tester) async {
@@ -187,7 +208,7 @@ void main() {
         ('-10', '금액은 1달러 이상이어야 합니다.'),
         ('0x10', '금액은 숫자로 입력하세요. (달러 단위, 소수점 없음)'),
         ('+5', '금액은 숫자로 입력하세요. (달러 단위, 소수점 없음)'),
-        ('10000000', '금액은 9999999달러 이하여야 합니다.'),
+        ('21474837', '금액은 21,474,836달러 이하여야 합니다.'),
       ]) {
         await enter(tester, 'bank-transfer-amount-input', text);
         await tapId(tester, 'bank-transfer-submit');
@@ -197,8 +218,8 @@ void main() {
     });
   });
 
-  group('deposit and withdraw', () {
-    testWidgets('a deposit raises the balance, returns to the tab, and shows in the history', (tester) async {
+  group('depositing', () {
+    testWidgets('a deposit goes into the bank account, closes the dialog, and shows in the history', (tester) async {
       final server = newServer();
       await pumpApp(tester, server);
       await openForm(tester, 'my-account-deposit');
@@ -207,59 +228,94 @@ void main() {
       await tapId(tester, 'bank-transfer-submit');
 
       expect(server.bodies['POST /bankTransfers'], {'bankAccountId': 'b1', 'amount': 50, 'type': 'deposit'});
-      expect(byId('bank-transfer-submit'), findsNothing); // back on the tab
-      expect(balance('\$150.00'), findsOneWidget);
-      expect(find.text('\$50.00를 입금했습니다.'), findsOneWidget);
+      expect(byId('bank-transfer-dialog'), findsNothing); // back on the tab
+      expect(find.text('First Test Bank 계좌에 \$50.00를 입금했습니다.'), findsOneWidget);
       expect(find.text('입금 · First Test Bank'), findsOneWidget);
-      expect(find.textContaining('잔액 \$100.00 → \$150.00'), findsOneWidget);
+      expect(find.textContaining('계좌 잔액 \$0.00 → \$50.00'), findsOneWidget);
+      expect(server.accounts.first['balance'], 5000);
     });
 
-    testWidgets('a withdrawal lowers the balance', (tester) async {
+    testWidgets('a deposit does not change the balance of 내 계좌', (tester) async {
       final server = newServer();
       await pumpApp(tester, server);
-      await openForm(tester, 'my-account-withdraw');
+      await openForm(tester, 'my-account-deposit');
 
-      await enter(tester, 'bank-transfer-amount-input', '30');
+      await enter(tester, 'bank-transfer-amount-input', '50');
       await tapId(tester, 'bank-transfer-submit');
 
-      expect(server.bodies['POST /bankTransfers'], {'bankAccountId': 'b1', 'amount': 30, 'type': 'withdrawal'});
-      expect(balance('\$70.00'), findsOneWidget);
-      expect(find.text('\$30.00를 출금했습니다.'), findsOneWidget);
-      expect(find.text('출금 · First Test Bank'), findsOneWidget);
+      expect(balance('\$100.00'), findsOneWidget);
+      expect(server.balance, 10000);
     });
 
-    testWidgets('withdrawing more than the balance is refused by the server; the app only tells the user',
-        (tester) async {
+    testWidgets('the bank account list shows the new money of the account after a deposit', (tester) async {
+      await pumpApp(tester, newServer());
+      await openForm(tester, 'my-account-deposit');
+      await enter(tester, 'bank-transfer-amount-input', '50');
+      await tapId(tester, 'bank-transfer-submit');
+
+      await tapId(tester, 'sidenav-bankaccounts');
+
+      expect(find.text('계좌 번호 ****6789 · 잔액 \$50.00'), findsOneWidget);
+    });
+
+    testWidgets('the dialog shows how much each account holds', (tester) async {
+      final server = newServer(accounts: [
+        testAccount('b1', bank: 'First Test Bank', balance: 12345),
+        testAccount('b2', bank: 'Second Test Bank'),
+      ]);
+      await pumpApp(tester, server);
+      await openForm(tester, 'my-account-deposit');
+
+      expect(find.text('계좌 번호 ****6789 · 잔액 \$123.45'), findsOneWidget);
+      // An account without a balance from the server shows only its number.
+      expect(find.text('계좌 번호 ****6789'), findsOneWidget);
+    });
+
+    testWidgets('a second deposit adds to the account balance', (tester) async {
       final server = newServer();
       await pumpApp(tester, server);
-      await openForm(tester, 'my-account-withdraw');
+      for (final dollars in ['10', '25']) {
+        await openForm(tester, 'my-account-deposit');
+        await enter(tester, 'bank-transfer-amount-input', dollars);
+        await tapId(tester, 'bank-transfer-submit');
+      }
+
+      expect(server.accounts.first['balance'], 3500);
+      expect(find.textContaining('계좌 잔액 \$10.00 → \$35.00'), findsOneWidget);
+    });
+
+    testWidgets('a deposit that would make the account balance too large is refused by the server; the dialog stays',
+        (tester) async {
+      final server = newServer(accounts: [testAccount('b1', bank: 'First Test Bank', balance: 2147483000)]);
+      await pumpApp(tester, server);
+      await openForm(tester, 'my-account-deposit');
 
       await enter(tester, 'bank-transfer-amount-input', '500');
       await tapId(tester, 'bank-transfer-submit');
 
       // The app does not stop the request. The server answered 400.
       expect(server.calls, contains('POST /bankTransfers'));
-      expect(find.text('잔액이 부족합니다.'), findsOneWidget);
+      expect(find.text('잔액이 너무 커져서 입금할 수 없습니다.'), findsOneWidget);
       expect(byId('bank-transfer-error'), findsOneWidget);
-      expect(byId('bank-transfer-submit'), findsOneWidget); // still on the form
-      expect(server.balance, 10000);
+      expect(byId('bank-transfer-dialog'), findsOneWidget); // still open
+      expect(server.accounts.first['balance'], 2147483000);
       expect(server.transfers, isEmpty);
     });
 
     testWidgets('after a refusal the user can fix the amount and try again', (tester) async {
-      final server = newServer();
+      final server = newServer(accounts: [testAccount('b1', bank: 'First Test Bank', balance: 2147483000)]);
       await pumpApp(tester, server);
-      await openForm(tester, 'my-account-withdraw');
+      await openForm(tester, 'my-account-deposit');
 
       await enter(tester, 'bank-transfer-amount-input', '500');
       await tapId(tester, 'bank-transfer-submit');
       expect(byId('bank-transfer-error'), findsOneWidget);
 
-      await enter(tester, 'bank-transfer-amount-input', '40');
+      await enter(tester, 'bank-transfer-amount-input', '5');
       await tapId(tester, 'bank-transfer-submit');
 
-      expect(byId('bank-transfer-submit'), findsNothing);
-      expect(balance('\$60.00'), findsOneWidget);
+      expect(byId('bank-transfer-dialog'), findsNothing);
+      expect(server.accounts.first['balance'], 2147483500);
     });
 
     testWidgets('two taps in one frame send one request', (tester) async {
@@ -273,7 +329,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(server.calls.where((c) => c == 'POST /bankTransfers'), hasLength(1));
-      expect(server.balance, 10500);
+      expect(server.accounts.first['balance'], 500);
+      expect(server.balance, 10000);
     });
 
     testWidgets('other server answers get a Korean message', (tester) async {
@@ -305,7 +362,6 @@ void main() {
       // (The first-time setup would open here, so finish it with a new account.)
       await tapId(tester, 'user-onboarding-next');
       await enter(tester, 'bankaccount-bankName-input', 'New Test Bank');
-      await enter(tester, 'bankaccount-routingNumber-input', '111222333');
       await enter(tester, 'bankaccount-accountNumber-input', '555666777');
       await tapId(tester, 'bankaccount-submit');
       await tapId(tester, 'user-onboarding-next');
@@ -322,8 +378,10 @@ void main() {
       expect(byId('bank-transfer-no-account'), findsOneWidget);
       expect(find.text('입금하려면 은행 계좌가 필요합니다.'), findsOneWidget);
       expect(byId('bank-transfer-amount-input'), findsNothing);
+      expect(byId('bank-transfer-submit'), findsNothing); // nothing to submit
 
       await tapId(tester, 'bank-transfer-create-account');
+      expect(byId('bank-transfer-dialog'), findsNothing); // the dialog closed
       expect(byId('bankaccount-form'), findsOneWidget);
     });
   });

@@ -15,7 +15,11 @@ FakeServer newServer() => FakeServer(signedIn: true, accounts: [testAccount('b1'
     testOtherUser('u3', 'Cara', 'Test', username: 'cara'),
   ]);
 
-Future<void> openCreate(WidgetTester tester) => tapId(tester, 'nav-top-new-transaction');
+/// The 이체 button on the 내 계좌 tab starts a new transaction.
+Future<void> openCreate(WidgetTester tester) async {
+  await tapId(tester, 'sidenav-my-account');
+  await tapId(tester, 'my-account-transfer');
+}
 
 Future<void> fillForm(WidgetTester tester, {String amount = '25', String note = 'Lunch'}) async {
   await enter(tester, 'transaction-create-amount-input', amount);
@@ -34,16 +38,23 @@ Future<void> search(WidgetTester tester, String text) async {
 
 void main() {
   group('entry points', () {
-    testWidgets('home has a 새 거래 button to the left of the tabs', (tester) async {
+    testWidgets('home has no 새 거래 button, and the tabs still work', (tester) async {
       await pumpApp(tester, newServer());
 
-      expect(byId('nav-top-new-transaction'), findsOneWidget);
-      final button = tester.getTopLeft(byId('nav-top-new-transaction'));
-      final tabs = tester.getTopLeft(byId('nav-transaction-tabs'));
-      expect(button.dx, lessThan(tabs.dx));
-      // The tabs still work next to it.
+      expect(byId('nav-top-new-transaction'), findsNothing);
+      expect(find.text('새 거래'), findsNothing);
       await tapId(tester, 'nav-contacts-tab');
       expect(byId('transaction-list-empty'), findsOneWidget);
+    });
+
+    testWidgets('the 이체 button under the balance starts a new transaction', (tester) async {
+      await pumpApp(tester, newServer());
+      await tapId(tester, 'sidenav-my-account');
+
+      expect(find.descendant(of: byId('my-account-transfer'), matching: find.text('이체')), findsOneWidget);
+      await tapId(tester, 'my-account-transfer');
+
+      expect(byId('transaction-create-steps'), findsOneWidget);
     });
 
     testWidgets('an empty list has a button to create a transaction', (tester) async {
@@ -63,7 +74,7 @@ void main() {
       expect(find.text('새 거래'), findsWidgets);
       expect(byId('user-list-item-u2'), findsOneWidget);
       expect(byId('user-list-item-u3'), findsOneWidget);
-      expect(find.text('Bob Test'), findsOneWidget);
+      expect(find.text('Test Bob'), findsOneWidget);
       expect(find.text('@bob'), findsOneWidget);
       // The tab bar is not shown on this full screen.
       expect(byId('sidenav-home'), findsNothing);
@@ -134,7 +145,7 @@ void main() {
       await toStep2(tester, newServer());
 
       expect(byId('transaction-create-form'), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-create-receiver-name'), matching: find.text('Bob Test')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-create-receiver-name'), matching: find.text('Test Bob')), findsOneWidget);
       expect(byId('transaction-create-submit-payment'), findsOneWidget);
       expect(byId('transaction-create-submit-request'), findsOneWidget);
     });
@@ -171,9 +182,9 @@ void main() {
       await tapId(tester, 'transaction-create-submit-payment');
       expect(find.textContaining('숫자로 입력하세요'), findsOneWidget);
 
-      await fillForm(tester, amount: '10000000');
+      await fillForm(tester, amount: '21474837');
       await tapId(tester, 'transaction-create-submit-payment');
-      expect(find.textContaining('9999999달러 이하'), findsOneWidget);
+      expect(find.textContaining('21,474,836달러 이하'), findsOneWidget);
 
       expect(server.calls, isNot(contains('POST /transactions')));
     });
@@ -228,7 +239,7 @@ void main() {
         'amount': 25,
       });
       expect(find.text('결제 완료'), findsOneWidget);
-      expect(find.text('Bob Test님에게 \$25.00를 결제했습니다.'), findsOneWidget);
+      expect(find.text('Test Bob님에게 \$25.00를 결제했습니다.'), findsOneWidget);
       expect(find.text('메모: Lunch'), findsOneWidget);
 
       // The app already knows the new balance, before the 내 계좌 tab is opened.
@@ -254,7 +265,7 @@ void main() {
 
       expect((server.bodies['POST /transactions'] as Map)['transactionType'], 'request');
       expect(find.text('요청 완료'), findsOneWidget);
-      expect(find.text('Cara Test님에게 \$8.00를 요청했습니다.'), findsOneWidget);
+      expect(find.text('Test Cara님에게 \$8.00를 요청했습니다.'), findsOneWidget);
     });
 
     testWidgets('the new transaction shows in the 내 거래 list after returning', (tester) async {
@@ -310,7 +321,7 @@ void main() {
 
       expect(find.descendant(of: byId('sidenav-user-balance'), matching: find.text('\$100.00')), findsOneWidget);
       expect(find.text('내 계좌 잔액'), findsOneWidget);
-      expect(find.descendant(of: byId('my-account-full-name'), matching: find.text('Ada Kim')), findsOneWidget);
+      expect(find.descendant(of: byId('my-account-full-name'), matching: find.text('Kim Ada')), findsOneWidget);
       expect(find.descendant(of: byId('my-account-username'), matching: find.text('@tester')), findsOneWidget);
     });
 

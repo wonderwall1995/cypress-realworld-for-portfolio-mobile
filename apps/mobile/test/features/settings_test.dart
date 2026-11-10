@@ -113,16 +113,27 @@ void main() {
       expect(find.text('올바른 이메일 주소를 입력하세요.'), findsOneWidget);
     });
 
-    testWidgets('the phone rule is the web rule: no country code', (tester) async {
+    testWidgets('a bad phone number is refused with an example', (tester) async {
       final server = newServer();
       await pumpApp(tester, server);
       await openSettings(tester);
 
-      await fill(tester, phone: '+82 10 1234 5678');
+      await fill(tester, phone: 'abc');
       await tapId(tester, 'user-settings-submit');
 
-      expect(find.text('전화번호가 올바르지 않습니다.'), findsOneWidget);
+      expect(find.text('전화번호가 올바르지 않습니다. (예: 010-1234-5678)'), findsOneWidget);
       expect(server.calls.where((c) => c.startsWith('PATCH /users')), isEmpty);
+    });
+
+    testWidgets('a number with a country code is accepted (the server accepts it)', (tester) async {
+      final server = newServer();
+      await pumpApp(tester, server);
+      await openSettings(tester);
+
+      await fill(tester, phone: '+82 10-1234-5678');
+      await tapId(tester, 'user-settings-submit');
+
+      expect(server.bodies['PATCH /users/u1'], containsPair('phoneNumber', '+82 10-1234-5678'));
     });
   });
 
@@ -195,7 +206,7 @@ void main() {
       await goBack(tester);
       await tapId(tester, 'sidenav-my-account');
 
-      expect(find.descendant(of: byId('my-account-full-name'), matching: find.text('Grace Lee')), findsOneWidget);
+      expect(find.descendant(of: byId('my-account-full-name'), matching: find.text('Lee Grace')), findsOneWidget);
     });
 
     testWidgets('the saved values come back when the screen is opened again', (tester) async {
@@ -284,14 +295,21 @@ void main() {
       expect(validateEmail('a b@c.de'), '올바른 이메일 주소를 입력하세요.');
     });
 
-    // The same answers as the web regex gave when it was run from the web source file.
-    test('phone: the web rule, copied', () {
-      for (final ok in ['010-1234-5678', '01012345678', '650-555-1212', '1234567']) {
+    // The server's rule (PHONE_NUMBER_PATTERN): digits, spaces, hyphens and
+    // brackets, an optional leading "+", 7 to 20 characters, a digit at both ends.
+    test('phone: the server rule', () {
+      for (final ok in ['010-1234-5678', '01012345678', '650-555-1212', '1234567', '+82 10-1234-5678', '02 (123) 4567', '+1 650 555 1212']) {
         expect(validatePhoneNumber(ok), isNull, reason: ok);
       }
-      for (final bad in ['+82 10 1234 5678', '(02) 1234-5678', '+1 650 555 1212', '12', 'abc']) {
-        expect(validatePhoneNumber(bad), '전화번호가 올바르지 않습니다.', reason: bad);
+      const bad = '전화번호가 올바르지 않습니다. (예: 010-1234-5678)';
+      for (final no in ['12', '123456', 'abc', '010-1234-567a', '-1234567', '1234567-', '++821012345678', '(02', '1' * 21, '(02) 123-4567']) {
+        expect(validatePhoneNumber(no), bad, reason: no);
       }
+      // The server's own comment lists "(02) 123-4567", but its pattern needs a digit
+      // first, so it refuses a leading bracket. The app follows the pattern.
+      expect(validatePhoneNumber(' 010-1234-5678 '), isNull);
+      expect(validatePhoneNumber('abc', noun: '연락처'), '연락처가 올바르지 않습니다. (예: 010-1234-5678)');
+      expect(validatePhoneNumber('', noun: '연락처'), '연락처를 입력하세요.');
       expect(validatePhoneNumber(''), '전화번호를 입력하세요.');
     });
   });

@@ -7,11 +7,9 @@ import '../support/fake_server.dart';
 Future<void> fillAccountForm(
   WidgetTester tester, {
   String bank = 'Test Bank Two',
-  String routing = '111222333',
   String number = '555666777',
 }) async {
   await enter(tester, 'bankaccount-bankName-input', bank);
-  await enter(tester, 'bankaccount-routingNumber-input', routing);
   await enter(tester, 'bankaccount-accountNumber-input', number);
 }
 
@@ -38,7 +36,6 @@ void main() {
 
       expect(server.bodies['POST /bankAccounts'], {
         'bankName': 'Test Bank Two',
-        'routingNumber': '111222333',
         'accountNumber': '555666777',
       });
 
@@ -62,14 +59,12 @@ void main() {
 
       await tapId(tester, 'bankaccount-submit');
       expect(find.text('은행 이름을 입력하세요.'), findsOneWidget);
-      expect(find.text('라우팅 번호를 입력하세요.'), findsOneWidget);
       expect(find.text('계좌 번호를 입력하세요.'), findsOneWidget);
 
-      await fillAccountForm(tester, bank: 'Bank', routing: '12345', number: '12345678');
+      await fillAccountForm(tester, bank: 'Bank', number: '12345678');
       await tapId(tester, 'bankaccount-submit');
       // The bank name has no length rule any more: 'Bank' is accepted.
       expect(find.text('은행 이름은 5자 이상이어야 합니다.'), findsNothing);
-      expect(find.text('라우팅 번호는 9자리여야 합니다.'), findsOneWidget);
       expect(find.text('계좌 번호는 9자리 이상이어야 합니다.'), findsOneWidget);
 
       await fillAccountForm(tester, number: '1234567890123');
@@ -79,24 +74,48 @@ void main() {
       expect(server.calls, isNot(contains('POST /bankAccounts')));
     });
 
-    testWidgets('routing and account numbers must be digits only', (tester) async {
+    testWidgets('the account number must be digits only', (tester) async {
       final server = FakeServer(signedIn: true);
       await pumpApp(tester, server);
       await tapId(tester, 'user-onboarding-next');
 
       // The right length, but letters: this passed before the digit check.
-      await fillAccountForm(tester, routing: 'abcdefghi', number: 'abcdefghij');
+      await fillAccountForm(tester, number: 'abcdefghij');
       await tapId(tester, 'bankaccount-submit');
-      expect(find.text('라우팅 번호는 숫자만 입력하세요.'), findsOneWidget);
       expect(find.text('계좌 번호는 숫자만 입력하세요.'), findsOneWidget);
 
       // A space or a sign in the middle is not a digit either.
-      await fillAccountForm(tester, routing: '12345 678', number: '-12345678');
+      await fillAccountForm(tester, number: '-12345678');
       await tapId(tester, 'bankaccount-submit');
-      expect(find.text('라우팅 번호는 숫자만 입력하세요.'), findsOneWidget);
       expect(find.text('계좌 번호는 숫자만 입력하세요.'), findsOneWidget);
 
       expect(server.calls, isNot(contains('POST /bankAccounts')));
+    });
+
+    testWidgets('the list shows the money in each account when the server sends it', (tester) async {
+      final server = FakeServer(signedIn: true, accounts: [
+        testAccount('b1', bank: 'Rich Bank', balance: 123456),
+        testAccount('b2', bank: 'Plain Bank'),
+      ]);
+      await pumpApp(tester, server);
+      await tapId(tester, 'sidenav-bankaccounts');
+
+      expect(find.text('계좌 번호 ****6789 · 잔액 \$1,234.56'), findsOneWidget);
+      expect(find.text('계좌 번호 ****6789'), findsOneWidget);
+    });
+
+    testWidgets('there is no routing number field, and none is sent', (tester) async {
+      final server = FakeServer(signedIn: true);
+      await pumpApp(tester, server);
+      await tapId(tester, 'user-onboarding-next');
+
+      expect(byId('bankaccount-routingNumber-input'), findsNothing);
+      expect(find.text('라우팅 번호'), findsNothing);
+
+      await fillAccountForm(tester);
+      await tapId(tester, 'bankaccount-submit');
+
+      expect((server.bodies['POST /bankAccounts'] as Map).containsKey('routingNumber'), isFalse);
     });
 
     testWidgets('a short bank name is saved (there is no minimum length)', (tester) async {
@@ -122,7 +141,7 @@ void main() {
       expect(server.calls, isNot(contains('POST /bankAccounts')));
     });
 
-    testWidgets('the number rules are shown as hints inside the fields', (tester) async {
+    testWidgets('the account number rule is shown as a hint inside the field', (tester) async {
       await pumpApp(tester, FakeServer(signedIn: true));
       await tapId(tester, 'user-onboarding-next');
 
@@ -130,12 +149,11 @@ void main() {
           .widget<TextField>(find.descendant(of: byId(id), matching: find.byType(TextField)))
           .decoration!
           .hintText;
-      expect(hintOf('bankaccount-routingNumber-input'), '9자리 숫자');
       expect(hintOf('bankaccount-accountNumber-input'), '9~12자리 숫자');
       expect(hintOf('bankaccount-bankName-input'), isNull);
       // The hint is visible without focusing the field.
-      final routing = tester.widget<TextField>(find.descendant(of: byId('bankaccount-routingNumber-input'), matching: find.byType(TextField)));
-      expect(routing.decoration!.floatingLabelBehavior, FloatingLabelBehavior.always);
+      final account = tester.widget<TextField>(find.descendant(of: byId('bankaccount-accountNumber-input'), matching: find.byType(TextField)));
+      expect(account.decoration!.floatingLabelBehavior, FloatingLabelBehavior.always);
     });
 
     testWidgets('the form warns not to enter a real account (first-time setup)', (tester) async {
@@ -143,7 +161,7 @@ void main() {
       await tapId(tester, 'user-onboarding-next');
 
       expect(
-        find.descendant(of: byId('bankaccount-demo-notice'), matching: find.text('진짜 자신의 계좌를 만들진 말아주세요! 이건 데모 웹입니다.')),
+        find.descendant(of: byId('bankaccount-demo-notice'), matching: find.text('진짜 자신의 계좌를 만들진 말아주세요! 이건 데모 앱입니다.')),
         findsOneWidget,
       );
     });
@@ -154,7 +172,7 @@ void main() {
       await tapId(tester, 'bankaccount-new');
 
       expect(
-        find.descendant(of: byId('bankaccount-demo-notice'), matching: find.text('진짜 자신의 계좌를 만들진 말아주세요! 이건 데모 웹입니다.')),
+        find.descendant(of: byId('bankaccount-demo-notice'), matching: find.text('진짜 자신의 계좌를 만들진 말아주세요! 이건 데모 앱입니다.')),
         findsOneWidget,
       );
     });
@@ -384,6 +402,34 @@ void main() {
 
       expect(byId('bankaccount-load-error'), findsNothing);
       expect(byId('bankaccount-list-item-b1'), findsOneWidget);
+    });
+  });
+  group('the newer server answer (visible instead of isDeleted)', () {
+    Map<String, dynamic> newShape(String id, {String bank = 'New Shape Bank', bool visible = true}) => {
+          'id': id,
+          'bankName': bank,
+          'accountNumber': '123456789',
+          'visible': visible,
+        };
+
+    testWidgets('the list shows such accounts and hides the ones with visible: false', (tester) async {
+      final server = FakeServer(signedIn: true, accounts: [newShape('n1'), newShape('n2', bank: 'Hidden Bank', visible: false)]);
+      await pumpApp(tester, server);
+      await tapId(tester, 'sidenav-bankaccounts');
+
+      expect(find.text('New Shape Bank'), findsOneWidget);
+      expect(find.text('Hidden Bank'), findsNothing);
+    });
+
+    testWidgets('the first-time setup goes on after creating an account', (tester) async {
+      final server = FakeServer(signedIn: true);
+      await pumpApp(tester, server);
+      await tapId(tester, 'user-onboarding-next');
+
+      await fillAccountForm(tester);
+      await tapId(tester, 'bankaccount-submit');
+
+      expect(find.descendant(of: byId('user-onboarding-dialog-title'), matching: find.text('완료')), findsOneWidget);
     });
   });
 }

@@ -97,6 +97,7 @@ class ApiClient {
     required String lastName,
     required String username,
     required String password,
+    required String phoneNumber,
   }) async {
     try {
       await dio.post<Object>(
@@ -106,6 +107,7 @@ class ApiClient {
           'lastName': lastName,
           'username': username,
           'password': password,
+          'phoneNumber': phoneNumber,
         },
       );
     } on DioException catch (e) {
@@ -126,7 +128,6 @@ class ApiClient {
 
   Future<Map<String, dynamic>> createBankAccount({
     required String bankName,
-    required String routingNumber,
     required String accountNumber,
   }) async {
     try {
@@ -134,7 +135,6 @@ class ApiClient {
         '/bankAccounts',
         data: {
           'bankName': bankName,
-          'routingNumber': routingNumber,
           'accountNumber': accountNumber,
         },
       );

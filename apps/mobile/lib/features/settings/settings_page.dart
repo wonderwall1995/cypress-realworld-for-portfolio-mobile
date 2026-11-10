@@ -1,3 +1,4 @@
+import '../../core/person_name.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -113,7 +114,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(sessionProvider.select((s) => s.user));
-    final fullName = '${user?['firstName'] ?? ''} ${user?['lastName'] ?? ''}'.trim();
+    final fullName = koreanFullName(
+      firstName: user?['firstName'] as String?,
+      lastName: user?['lastName'] as String?,
+    );
     final username = user?['username'] as String?;
     final theme = Theme.of(context);
 
