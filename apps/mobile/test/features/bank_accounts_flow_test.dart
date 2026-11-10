@@ -67,7 +67,8 @@ void main() {
 
       await fillAccountForm(tester, bank: 'Bank', routing: '12345', number: '12345678');
       await tapId(tester, 'bankaccount-submit');
-      expect(find.text('은행 이름은 5자 이상이어야 합니다.'), findsOneWidget);
+      // The bank name has no length rule any more: 'Bank' is accepted.
+      expect(find.text('은행 이름은 5자 이상이어야 합니다.'), findsNothing);
       expect(find.text('라우팅 번호는 9자리여야 합니다.'), findsOneWidget);
       expect(find.text('계좌 번호는 9자리 이상이어야 합니다.'), findsOneWidget);
 
@@ -76,6 +77,86 @@ void main() {
       expect(find.text('계좌 번호는 12자리 이하여야 합니다.'), findsOneWidget);
 
       expect(server.calls, isNot(contains('POST /bankAccounts')));
+    });
+
+    testWidgets('routing and account numbers must be digits only', (tester) async {
+      final server = FakeServer(signedIn: true);
+      await pumpApp(tester, server);
+      await tapId(tester, 'user-onboarding-next');
+
+      // The right length, but letters: this passed before the digit check.
+      await fillAccountForm(tester, routing: 'abcdefghi', number: 'abcdefghij');
+      await tapId(tester, 'bankaccount-submit');
+      expect(find.text('라우팅 번호는 숫자만 입력하세요.'), findsOneWidget);
+      expect(find.text('계좌 번호는 숫자만 입력하세요.'), findsOneWidget);
+
+      // A space or a sign in the middle is not a digit either.
+      await fillAccountForm(tester, routing: '12345 678', number: '-12345678');
+      await tapId(tester, 'bankaccount-submit');
+      expect(find.text('라우팅 번호는 숫자만 입력하세요.'), findsOneWidget);
+      expect(find.text('계좌 번호는 숫자만 입력하세요.'), findsOneWidget);
+
+      expect(server.calls, isNot(contains('POST /bankAccounts')));
+    });
+
+    testWidgets('a short bank name is saved (there is no minimum length)', (tester) async {
+      final server = FakeServer(signedIn: true);
+      await pumpApp(tester, server);
+      await tapId(tester, 'user-onboarding-next');
+
+      await fillAccountForm(tester, bank: 'K');
+      await tapId(tester, 'bankaccount-submit');
+
+      expect(server.bodies['POST /bankAccounts'], containsPair('bankName', 'K'));
+    });
+
+    testWidgets('an empty bank name is still refused', (tester) async {
+      final server = FakeServer(signedIn: true);
+      await pumpApp(tester, server);
+      await tapId(tester, 'user-onboarding-next');
+
+      await fillAccountForm(tester, bank: '   ');
+      await tapId(tester, 'bankaccount-submit');
+
+      expect(find.text('은행 이름을 입력하세요.'), findsOneWidget);
+      expect(server.calls, isNot(contains('POST /bankAccounts')));
+    });
+
+    testWidgets('the number rules are shown as hints inside the fields', (tester) async {
+      await pumpApp(tester, FakeServer(signedIn: true));
+      await tapId(tester, 'user-onboarding-next');
+
+      String? hintOf(String id) => tester
+          .widget<TextField>(find.descendant(of: byId(id), matching: find.byType(TextField)))
+          .decoration!
+          .hintText;
+      expect(hintOf('bankaccount-routingNumber-input'), '9자리 숫자');
+      expect(hintOf('bankaccount-accountNumber-input'), '9~12자리 숫자');
+      expect(hintOf('bankaccount-bankName-input'), isNull);
+      // The hint is visible without focusing the field.
+      final routing = tester.widget<TextField>(find.descendant(of: byId('bankaccount-routingNumber-input'), matching: find.byType(TextField)));
+      expect(routing.decoration!.floatingLabelBehavior, FloatingLabelBehavior.always);
+    });
+
+    testWidgets('the form warns not to enter a real account (first-time setup)', (tester) async {
+      await pumpApp(tester, FakeServer(signedIn: true));
+      await tapId(tester, 'user-onboarding-next');
+
+      expect(
+        find.descendant(of: byId('bankaccount-demo-notice'), matching: find.text('진짜 자신의 계좌를 만들진 말아주세요! 이건 데모 웹입니다.')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the same warning is on the add-account screen', (tester) async {
+      await pumpApp(tester, FakeServer(signedIn: true, accounts: [testAccount('b1')]));
+      await tapId(tester, 'sidenav-bankaccounts');
+      await tapId(tester, 'bankaccount-new');
+
+      expect(
+        find.descendant(of: byId('bankaccount-demo-notice'), matching: find.text('진짜 자신의 계좌를 만들진 말아주세요! 이건 데모 웹입니다.')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('a server refusal shows an error and stays on step 2', (tester) async {
