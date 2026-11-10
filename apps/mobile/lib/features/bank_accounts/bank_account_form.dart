@@ -10,6 +10,14 @@ String bankAccountErrorMessage(ApiException e) {
   return '은행 계좌를 저장하지 못했습니다. 입력한 내용을 확인해 주세요.';
 }
 
+/// Shown above the form: the user must not type a real bank account.
+const bankAccountDemoNotice = '진짜 자신의 계좌를 만들진 말아주세요! 이건 데모 웹입니다.';
+
+/// The number rules, shown as the hint inside the fields. The checks below use
+/// the same numbers.
+const routingNumberHint = '9자리 숫자';
+const accountNumberHint = '9~12자리 숫자';
+
 typedef BankAccountSubmit = Future<void> Function({
   required String bankName,
   required String routingNumber,
@@ -74,6 +82,8 @@ class _BankAccountFormState extends State<BankAccountForm> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const _DemoNotice(),
+            const SizedBox(height: 16),
             if (_error != null) ...[
               FormErrorBanner(id: 'bankaccount-error', message: _error!),
               const SizedBox(height: 16),
@@ -84,13 +94,13 @@ class _BankAccountFormState extends State<BankAccountForm> {
                 controller: _bankName,
                 decoration: const InputDecoration(
                   labelText: '은행 이름',
+                  floatingLabelBehavior: FloatingLabelBehavior.always,
                   border: OutlineInputBorder(),
                 ),
                 textInputAction: TextInputAction.next,
                 validator: (v) {
                   final value = v?.trim() ?? '';
                   if (value.isEmpty) return '은행 이름을 입력하세요.';
-                  if (value.length < 5) return '은행 이름은 5자 이상이어야 합니다.';
                   return null;
                 },
               ),
@@ -102,6 +112,8 @@ class _BankAccountFormState extends State<BankAccountForm> {
                 controller: _routing,
                 decoration: const InputDecoration(
                   labelText: '라우팅 번호',
+                  hintText: routingNumberHint,
+                  floatingLabelBehavior: FloatingLabelBehavior.always,
                   border: OutlineInputBorder(),
                 ),
                 keyboardType: TextInputType.number,
@@ -122,6 +134,8 @@ class _BankAccountFormState extends State<BankAccountForm> {
                 controller: _account,
                 decoration: const InputDecoration(
                   labelText: '계좌 번호',
+                  hintText: accountNumberHint,
+                  floatingLabelBehavior: FloatingLabelBehavior.always,
                   border: OutlineInputBorder(),
                 ),
                 keyboardType: TextInputType.number,
@@ -141,6 +155,42 @@ class _BankAccountFormState extends State<BankAccountForm> {
             TestId(
               'bankaccount-submit',
               child: BusyFilledButton(label: '저장', busy: _busy, onPressed: _submit),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A short warning above the form. It is not an error, so it is not red.
+class _DemoNotice extends StatelessWidget {
+  const _DemoNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return TestId(
+      'bankaccount-demo-notice',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: colors.tertiaryContainer,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline, size: 18, color: colors.onTertiaryContainer),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                bankAccountDemoNotice,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: colors.onTertiaryContainer),
+              ),
             ),
           ],
         ),
