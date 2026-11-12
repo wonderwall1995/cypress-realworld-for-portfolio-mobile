@@ -94,10 +94,10 @@ void main() {
         ],
       });
     });
-    final page = await client.getTransactions('/transactions/contacts', page: 2);
+    final page = await client.getTransactions('/transactions/public', page: 2);
     expect(page.results.single['id'], 't1');
     expect(page.hasNextPages, isTrue);
-    expect(seen.uri.toString(), 'http://api.test/api/transactions/contacts?page=2&limit=10');
+    expect(seen.uri.toString(), 'http://api.test/api/transactions/public?page=2&limit=10');
   });
 
   test('getTransactions: a missing pageData means no next page', () async {

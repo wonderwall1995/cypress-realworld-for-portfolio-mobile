@@ -11,6 +11,7 @@ import '../bank_accounts/bank_account.dart';
 import '../bank_accounts/bank_accounts_controller.dart';
 import '../transactions/amount_input.dart';
 import '../transactions/transaction.dart';
+import '../transactions/transaction_feed_controller.dart';
 import 'bank_transfer.dart';
 import 'bank_transfers_controller.dart';
 
@@ -77,6 +78,8 @@ class _DepositDialogState extends ConsumerState<DepositDialog> {
       // The money of that bank account and the history have changed.
       ref.invalidate(bankTransfersProvider);
       await ref.read(bankAccountsProvider.notifier).reload();
+      // The server made an "외부 입금" transaction: the home lists load again.
+      ref.invalidate(transactionFeedProvider);
       await ref.read(sessionProvider.notifier).refreshUser();
       messenger.showSnackBar(
         SnackBar(

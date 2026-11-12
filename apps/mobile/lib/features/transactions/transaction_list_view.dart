@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/test_id.dart';
 import 'transaction.dart';
 import 'transaction_feed_controller.dart';
+import '../bank_accounts/bank_accounts_controller.dart';
+import '../../core/session.dart';
 import 'transaction_filters.dart';
 import 'transaction_widgets.dart';
 
@@ -176,15 +178,28 @@ class _Footer extends StatelessWidget {
   }
 }
 
-class _TransactionTile extends StatelessWidget {
+class _TransactionTile extends ConsumerWidget {
   const _TransactionTile({required this.transaction, required this.onTap});
 
   final Transaction transaction;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final me = ref.watch(sessionProvider.select((s) => s.user?['id'])) as String?;
+    // The bank of the user's own account in this transaction. The server sends it as
+    // `myAccount`; for an external deposit the account id is the fallback.
+    String? bankName = transaction.myAccount?.bankName;
+    if (bankName == null && transaction.isExternalDeposit) {
+      final accounts = ref.watch(bankAccountsProvider).value ?? const [];
+      bankName = accounts.where((a) => a.id == transaction.source).firstOrNull?.bankName;
+    }
+    // Only a transaction that really moved the user's money says "입금" or "출금".
+    final received = transaction.moneyMoved ? transaction.receivedBy(me) : null;
+    final showSentence = received != null && (transaction.isExternalDeposit || transaction.myAccount != null);
+    final balanceAfter = transaction.moneyMoved ? transaction.myAccount?.balanceAfter : null;
     return TestId(
       'transaction-item-${transaction.id}',
       child: InkWell(
@@ -194,15 +209,37 @@ class _TransactionTile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              InitialAvatar(transaction.senderName),
+              TransactionSenderAvatar(transaction),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // The day first, 1.3 times the size of the small text.
+                    if (transaction.dateLabel != null) ...[
+                      TestId(
+                        'transaction-date-${transaction.id}',
+                        child: Text(
+                          transaction.dateLabel!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: muted,
+                            fontSize: (theme.textTheme.bodySmall?.fontSize ?? 12) * 1.3,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                    // Title, then the bank line (only when money moved), then the memo.
+                    // An external deposit has no memo line.
                     TransactionTitleLine(transaction),
-                    const SizedBox(height: 4),
-                    Text(transaction.description),
+                    if (showSentence || transaction.isExternalDeposit) ...[
+                      const SizedBox(height: 4),
+                      BankMoveSentence(id: transaction.id, bankName: bankName, deposit: received ?? true),
+                    ],
+                    if (!transaction.isExternalDeposit) ...[
+                      const SizedBox(height: 4),
+                      Text(transaction.description),
+                    ],
                     const SizedBox(height: 6),
                     Row(
                       children: [
@@ -219,7 +256,19 @@ class _TransactionTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              TransactionAmountText(transaction),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 170),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    TransactionAmountText(transaction),
+                    if (balanceAfter != null && bankName != null) ...[
+                      const SizedBox(height: 2),
+                      BankBalanceText(id: transaction.id, bankName: bankName, balanceAfter: balanceAfter),
+                    ],
+                  ],
+                ),
+              ),
             ],
           ),
         ),

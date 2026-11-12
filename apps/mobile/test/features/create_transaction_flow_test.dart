@@ -6,9 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/app_harness.dart';
 import '../support/fake_server.dart';
+import '../support/transfer_helpers.dart';
 
 /// A signed-in user ($100.00) with a bank account and two other users.
-FakeServer newServer() => FakeServer(signedIn: true, accounts: [testAccount('b1')])
+FakeServer newServer() => FakeServer(signedIn: true, accounts: [testAccount('b1', balance: 20000)])
   ..balance = 10000
   ..users.addAll([
     testOtherUser('u2', 'Bob', 'Test', username: 'bob'),
@@ -43,7 +44,7 @@ void main() {
 
       expect(byId('nav-top-new-transaction'), findsNothing);
       expect(find.text('새 거래'), findsNothing);
-      await tapId(tester, 'nav-contacts-tab');
+      await tapId(tester, 'nav-personal-tab');
       expect(byId('transaction-list-empty'), findsOneWidget);
     });
 
@@ -67,6 +68,47 @@ void main() {
   });
 
   group('step 1: choose a user', () {
+    testWidgets('an empty or blank search box lists everyone (the other users)', (tester) async {
+      final server = newServer();
+      await pumpApp(tester, server);
+      await openCreate(tester);
+      final everyone = server.calls.where((c) => c == 'GET /users').length;
+      expect(byId('user-list-item-u2'), findsOneWidget);
+
+      await enterIn(tester, 'user-list-search-input', 'Bob');
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+      expect(server.calls, contains('GET /users/search'));
+
+      // Only spaces: the same as an empty box, so the whole list comes back.
+      await enterIn(tester, 'user-list-search-input', '   ');
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+
+      expect(server.calls.where((c) => c == 'GET /users').length, greaterThan(everyone));
+      expect(server.calls.where((c) => c == 'GET /users/search').length, 1);
+      expect(byId('user-list-item-u2'), findsOneWidget);
+    });
+
+    testWidgets('a long name is not shortened by the app, and ends with … when it does not fit', (tester) async {
+      final server = newServer();
+      await pumpApp(tester, server);
+      await openCreate(tester);
+
+      final name = tester.widget<Text>(find.descendant(of: byId('user-list-item-u2'), matching: find.text('Test Bob')));
+      expect(name.maxLines, 1);
+      expect(name.overflow, TextOverflow.ellipsis);
+      expect(name.data, 'Test Bob'); // the whole name
+    });
+
+    testWidgets('the search box says it finds by name or phone number', (tester) async {
+      await pumpApp(tester, newServer());
+      await openCreate(tester);
+
+      final field = tester.widget<TextField>(find.descendant(of: byId('user-list-search-input'), matching: find.byType(TextField)));
+      expect(field.decoration!.hintText, '이름 또는 전화번호로 검색...');
+    });
+
     testWidgets('lists the other users', (tester) async {
       await pumpApp(tester, newServer());
       await openCreate(tester);
@@ -147,7 +189,7 @@ void main() {
       expect(byId('transaction-create-form'), findsOneWidget);
       expect(find.descendant(of: byId('transaction-create-receiver-name'), matching: find.text('Test Bob')), findsOneWidget);
       expect(byId('transaction-create-submit-payment'), findsOneWidget);
-      expect(byId('transaction-create-submit-request'), findsOneWidget);
+      expect(byId('transaction-create-submit-request'), findsNothing); // 요청 is gone
     });
 
     testWidgets('a negative, signed, or hex amount is refused and nothing is sent', (tester) async {
@@ -200,26 +242,42 @@ void main() {
     });
 
     testWidgets('a refusal shows an error and stays on the form', (tester) async {
-      final server = newServer()..createTransactionStatus = 500;
+      final server = newServer()
+        ..createTransactionStatus = 400
+        ..createTransactionMessage = 'receiving bank account balance would be too large';
       await toStep2(tester, server);
 
       await fillForm(tester);
-      await tapId(tester, 'transaction-create-submit-payment');
+      await payNow(tester);
 
-      expect(byId('transaction-create-error'), findsOneWidget);
-      expect(find.text('결제하지 못했습니다. 입력한 내용을 확인해 주세요.'), findsOneWidget);
+      // The confirm dialog stays open with the reason; no "이체 완료" screen.
+      expect(byId('transfer-confirm-dialog'), findsOneWidget);
+      expect(find.descendant(of: byId('transfer-confirm-error'), matching: find.text('받는 계좌의 잔액 한도를 넘어서 이체할 수 없습니다')), findsOneWidget);
+      expect(find.text('이체 완료'), findsNothing);
       expect(byId('transaction-create-form'), findsOneWidget);
+
+      // The user can try again, and the next approval goes through.
+      server.createTransactionStatus = null;
+      await tapId(tester, 'transfer-confirm-submit');
+      await tester.pumpAndSettle();
+      expect(byId('transfer-confirm-dialog'), findsNothing);
+      expect(find.text('이체 완료'), findsOneWidget);
     });
 
-    testWidgets('a failed request says 요청, not 결제', (tester) async {
+    testWidgets('a refusal with an unknown reason shows it in brackets; no answer says so', (tester) async {
       final server = newServer()..createTransactionStatus = 500;
       await toStep2(tester, server);
-
       await fillForm(tester);
-      await tapId(tester, 'transaction-create-submit-request');
+      await payNow(tester);
+      expect(find.text('이체하지 못했습니다 (refused)'), findsOneWidget);
 
-      expect(find.text('요청하지 못했습니다. 입력한 내용을 확인해 주세요.'), findsOneWidget);
+      server.down = true;
+      await tapId(tester, 'transfer-confirm-submit');
+      await tester.pump();
+      expect(find.text('서버에서 처리하지 못했습니다. 잠시 뒤 다시 시도하세요'), findsOneWidget);
+      expect(find.text('이체 완료'), findsNothing);
     });
+
   });
 
   group('step 3: done', () {
@@ -230,16 +288,20 @@ void main() {
       await tapId(tester, 'user-list-item-u2');
 
       await fillForm(tester, amount: '25', note: 'Lunch');
-      await tapId(tester, 'transaction-create-submit-payment');
+      await payNow(tester);
 
       expect(server.bodies['POST /transactions'], {
         'transactionType': 'payment',
         'receiverId': 'u2',
         'description': 'Lunch',
         'amount': 25,
+        'myAccountId': 'b1',
+        'otherAccountId': 'o-u2',
+        'password': 'pw-1234',
+        'privacyLevel': 'public',
       });
-      expect(find.text('결제 완료'), findsOneWidget);
-      expect(find.text('Test Bob님에게 \$25.00를 결제했습니다.'), findsOneWidget);
+      expect(find.text('이체 완료'), findsOneWidget);
+      expect(find.text('Test Bob님에게 \$25.00를 이체했습니다.'), findsOneWidget);
       expect(find.text('메모: Lunch'), findsOneWidget);
 
       // The app already knows the new balance, before the 내 계좌 tab is opened.
@@ -254,27 +316,13 @@ void main() {
       expect(find.descendant(of: byId('sidenav-user-balance'), matching: find.text('\$75.00')), findsOneWidget);
     });
 
-    testWidgets('a request is sent as a request', (tester) async {
-      final server = newServer();
-      await pumpApp(tester, server);
-      await openCreate(tester);
-      await tapId(tester, 'user-list-item-u3');
-
-      await fillForm(tester, amount: '8', note: 'Coffee');
-      await tapId(tester, 'transaction-create-submit-request');
-
-      expect((server.bodies['POST /transactions'] as Map)['transactionType'], 'request');
-      expect(find.text('요청 완료'), findsOneWidget);
-      expect(find.text('Test Cara님에게 \$8.00를 요청했습니다.'), findsOneWidget);
-    });
-
     testWidgets('the new transaction shows in the 내 거래 list after returning', (tester) async {
       final server = newServer();
       await pumpApp(tester, server);
       await openCreate(tester);
       await tapId(tester, 'user-list-item-u2');
       await fillForm(tester, amount: '25', note: 'Lunch');
-      await tapId(tester, 'transaction-create-submit-payment');
+      await payNow(tester);
       await tapId(tester, 'new-transaction-return-to-transactions');
 
       await tapId(tester, 'nav-personal-tab');
@@ -287,7 +335,7 @@ void main() {
       await openCreate(tester);
       await tapId(tester, 'user-list-item-u2');
       await fillForm(tester);
-      await tapId(tester, 'transaction-create-submit-payment');
+      await payNow(tester);
 
       await tapId(tester, 'new-transaction-create-another-transaction');
 
@@ -300,7 +348,7 @@ void main() {
       await openCreate(tester);
       await tapId(tester, 'user-list-item-u2');
       await fillForm(tester);
-      await tapId(tester, 'transaction-create-submit-payment');
+      await payNow(tester);
       await tapId(tester, 'new-transaction-return-to-transactions');
 
       await openCreate(tester);

@@ -7,10 +7,15 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api_client.dart';
 import '../../../core/test_id.dart';
 import '../../auth/auth_widgets.dart';
+import '../../bank_accounts/account_pickers.dart';
+import '../../bank_accounts/bank_account.dart';
+import '../../bank_accounts/bank_accounts_controller.dart';
+import '../../bank_accounts/other_account.dart';
 import '../amount_input.dart';
 import '../transaction.dart';
 import '../transaction_widgets.dart';
 import 'create_transaction_controller.dart';
+import 'password_confirm_dialog.dart';
 import 'user_summary.dart';
 
 /// "새 거래": choose a user, enter the amount and note, then done.
@@ -26,7 +31,9 @@ class CreateTransactionPage extends ConsumerWidget {
       // On step 2, Back goes to step 1. On the other steps it leaves the screen.
       canPop: state.step != CreateStep.payment,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && state.step == CreateStep.payment) controller.backToContacts();
+        if (!didPop && state.step == CreateStep.payment) {
+          controller.backToContacts();
+        }
       },
       child: Scaffold(
         appBar: AppBar(
@@ -53,7 +60,7 @@ class _StepHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const labels = ['연락처 선택', '결제', '완료'];
+    const labels = ['연락처 선택', '이체', '완료'];
     final theme = Theme.of(context);
     return TestId(
       'transaction-create-steps',
@@ -69,7 +76,9 @@ class _StepHeader extends StatelessWidget {
                   color: i == step.index
                       ? theme.colorScheme.primary
                       : theme.colorScheme.onSurfaceVariant,
-                  fontWeight: i == step.index ? FontWeight.w700 : FontWeight.w400,
+                  fontWeight: i == step.index
+                      ? FontWeight.w700
+                      : FontWeight.w400,
                 ),
               ),
           ],
@@ -123,7 +132,7 @@ class _SelectContactStepState extends ConsumerState<_SelectContactStep> {
               onChanged: _onChanged,
               textInputAction: TextInputAction.search,
               decoration: const InputDecoration(
-                hintText: '이름이나 아이디로 검색',
+                hintText: '이름 또는 전화번호로 검색...',
                 prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(),
               ),
@@ -152,7 +161,10 @@ class _SelectContactStepState extends ConsumerState<_SelectContactStep> {
             ),
             data: (list) => list.isEmpty
                 ? const Center(
-                    child: TestId('user-list-empty', child: Text('검색 결과가 없습니다.')),
+                    child: TestId(
+                      'user-list-empty',
+                      child: Text('검색 결과가 없습니다.'),
+                    ),
                   )
                 : TestId(
                     'user-list',
@@ -180,9 +192,10 @@ class _UserTile extends ConsumerWidget {
       'user-list-item-${user.id}',
       child: ListTile(
         leading: InitialAvatar(user.fullName),
-        title: Text(user.fullName),
+        title: Text(user.fullName, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text('@${user.username}'),
-        onTap: () => ref.read(createTransactionProvider.notifier).selectReceiver(user),
+        onTap: () =>
+            ref.read(createTransactionProvider.notifier).selectReceiver(user),
       ),
     );
   }
@@ -190,10 +203,13 @@ class _UserTile extends ConsumerWidget {
 
 // ---- Step 2: amount and note -----------------------------------------------
 
-String transactionErrorMessage(ApiException e, {required bool isPayment}) {
+String transactionErrorMessage(ApiException e) {
   if (e.isConnection) return '서버에 연결할 수 없습니다.';
-  final what = isPayment ? '결제' : '요청';
-  return '$what하지 못했습니다. 입력한 내용을 확인해 주세요.';
+  if (e.statusCode == 403) return '비밀번호가 올바르지 않거나 이 계좌를 쓸 수 없습니다.';
+  if (e.statusCode == 400 && e.message.contains('not enough balance')) {
+    return '선택한 계좌의 잔액이 부족합니다.';
+  }
+  return '이체하지 못했습니다. 입력한 내용을 확인해 주세요.';
 }
 
 class _PaymentStep extends ConsumerStatefulWidget {
@@ -209,8 +225,10 @@ class _PaymentStepState extends ConsumerState<_PaymentStep> {
   final _formKey = GlobalKey<FormState>();
   final _amount = TextEditingController();
   final _description = TextEditingController();
-  bool _busy = false;
-  String? _error;
+  String? _myAccountId;
+  String? _otherAccountId;
+  String? _myAccountError;
+  String? _otherAccountError;
 
   @override
   void dispose() {
@@ -219,28 +237,90 @@ class _PaymentStepState extends ConsumerState<_PaymentStep> {
     super.dispose();
   }
 
-  Future<void> _submit(String type) async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await ref.read(createTransactionProvider.notifier).submit(
-            type: type,
-            dollars: int.parse(_amount.text.trim()),
-            description: _description.text.trim(),
-          );
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      setState(() => _error = transactionErrorMessage(e, isPayment: type == 'payment'));
-    } finally {
-      if (mounted) setState(() => _busy = false);
+  /// The typed amount in cents, or null while it is not a valid amount.
+  int? get _amountCents {
+    final text = _amount.text.trim();
+    if (validateDollars(text) != null) return null;
+    return int.parse(text) * 100;
+  }
+
+  /// With one account there is nothing to choose, so it counts as chosen.
+  String? _selectedMine(List<BankAccount> accounts) =>
+      _myAccountId ?? (accounts.length == 1 ? accounts.single.id : null);
+
+  String? _selectedOther(List<OtherAccount> accounts) =>
+      _otherAccountId ?? (accounts.length == 1 ? accounts.single.id : null);
+
+  /// The button stays off while the chosen account holds less than the amount.
+  bool _canSubmit(List<BankAccount> mine) {
+    final cents = _amountCents;
+    final account = mine.where((a) => a.id == _selectedMine(mine)).firstOrNull;
+    if (cents == null || account == null) return true;
+    return MyAccountPicker.isEnough(account, cents);
+  }
+
+  Future<void> _submit() async {
+    final mine = ref.read(bankAccountsProvider).value ?? const <BankAccount>[];
+    final others =
+        ref.read(otherAccountsProvider(widget.receiver.id)).value ??
+        const <OtherAccount>[];
+    final formOk = _formKey.currentState!.validate();
+    final myId = _selectedMine(mine);
+    final otherId = _selectedOther(others);
+    final cents = _amountCents;
+    final myAccount = mine.where((a) => a.id == myId).firstOrNull;
+
+    String? myError;
+    String? otherError;
+    if (myId == null) {
+      myError = '출금할 내 계좌를 선택하세요.';
+    } else if (cents != null && !MyAccountPicker.isEnough(myAccount!, cents)) {
+      myError = '선택한 계좌의 잔액이 부족합니다.';
     }
+    if (others.isEmpty) {
+      otherError = '상대에게 은행 계좌가 없어 이체할 수 없습니다.';
+    } else if (otherId == null) {
+      otherError = '상대의 계좌를 선택하세요.';
+    }
+    setState(() {
+      _myAccountError = myError;
+      _otherAccountError = otherError;
+    });
+    if (!formOk || myError != null || otherError != null) return;
+
+    // The last step: the user's own password, checked before any money moves.
+    final other = others.where((a) => a.id == otherId).firstOrNull;
+    // The dialog checks the password and sends the transfer. It closes, and the
+    // "이체 완료" screen opens, only after the server approved. A refusal stays in
+    // the dialog with its reason.
+    final controller = ref.read(createTransactionProvider.notifier);
+    final dollars = int.parse(_amount.text.trim());
+    final description = _description.text.trim();
+    await askPasswordAndSend(
+      context,
+      question: '정말 이체하겠습니까?',
+      lines: [
+        '${myAccount!.bankName} ${myAccount.maskedAccountNumber} → '
+            '${widget.receiver.fullName}님 ${other == null ? '' : '${other.bankName} ****${other.last4}'}',
+        '금액 ${formatUsd(cents!)}',
+      ],
+      confirmLabel: '이체하기',
+      send: (password) => controller.submit(
+        type: 'payment',
+        dollars: dollars,
+        description: description,
+        myAccountId: myId!,
+        otherAccountId: otherId,
+        password: password,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final mine = ref.watch(bankAccountsProvider).value ?? const <BankAccount>[];
+    final others = ref.watch(otherAccountsProvider(widget.receiver.id));
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Center(
@@ -266,6 +346,8 @@ class _PaymentStepState extends ConsumerState<_PaymentStep> {
                               child: Text(
                                 widget.receiver.fullName,
                                 style: Theme.of(context).textTheme.titleMedium,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             Text('@${widget.receiver.username}'),
@@ -275,10 +357,6 @@ class _PaymentStepState extends ConsumerState<_PaymentStep> {
                     ],
                   ),
                   const SizedBox(height: 24),
-                  if (_error != null) ...[
-                    FormErrorBanner(id: 'transaction-create-error', message: _error!),
-                    const SizedBox(height: 16),
-                  ],
                   TestId(
                     'transaction-create-amount-input',
                     child: TextFormField(
@@ -291,6 +369,7 @@ class _PaymentStepState extends ConsumerState<_PaymentStep> {
                       ),
                       keyboardType: TextInputType.number,
                       textInputAction: TextInputAction.next,
+                      onChanged: (_) => setState(() {}),
                       validator: validateDollars,
                     ),
                   ),
@@ -308,30 +387,79 @@ class _PaymentStepState extends ConsumerState<_PaymentStep> {
                           (v == null || v.trim().isEmpty) ? '메모를 입력하세요.' : null,
                     ),
                   ),
+                  const SizedBox(height: 20),
+                  // My account: the money leaves it.
+                  // An account that holds less than the amount cannot be chosen.
+                  MyAccountPicker(
+                    idPrefix: 'transaction-create-my-account',
+                    title: '내 계좌 (출금)',
+                    accounts: mine,
+                    selectedId: _selectedMine(mine),
+                    requiredCents: _amountCents,
+                    errorText: _myAccountError,
+                    onChanged: (id) => setState(() {
+                      _myAccountId = id;
+                      _myAccountError = null;
+                    }),
+                  ),
+                  const SizedBox(height: 12),
+                  others.when(
+                    skipLoadingOnReload: true,
+                    loading: () => const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                    error: (error, _) => TestId(
+                      'transaction-create-other-accounts-error',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('상대의 은행 계좌를 불러오지 못했습니다.'),
+                          const SizedBox(height: 8),
+                          OutlinedButton(
+                            onPressed: () => ref.invalidate(
+                              otherAccountsProvider(widget.receiver.id),
+                            ),
+                            child: const Text('다시 시도'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    data: (list) => list.isEmpty
+                        ? TestId(
+                            'transaction-create-other-no-account',
+                            child: Text(
+                              _otherAccountError ??
+                                  '상대에게 은행 계좌가 없어 이체할 수 없습니다.',
+                              style: _otherAccountError == null
+                                  ? Theme.of(context).textTheme.bodySmall
+                                  : TextStyle(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.error,
+                                    ),
+                            ),
+                          )
+                        : OtherAccountPicker(
+                            idPrefix: 'transaction-create-other-account',
+                            title: '상대 계좌',
+                            accounts: list,
+                            selectedId: _selectedOther(list),
+                            errorText: _otherAccountError,
+                            onChanged: (id) => setState(() {
+                              _otherAccountId = id;
+                              _otherAccountError = null;
+                            }),
+                          ),
+                  ),
                   const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TestId(
-                          'transaction-create-submit-request',
-                          child: OutlinedButton(
-                            onPressed: _busy ? null : () => _submit('request'),
-                            child: const Text('요청'),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TestId(
-                          'transaction-create-submit-payment',
-                          child: BusyFilledButton(
-                            label: '결제',
-                            busy: _busy,
-                            onPressed: () => _submit('payment'),
-                          ),
-                        ),
-                      ),
-                    ],
+                  TestId(
+                    'transaction-create-submit-payment',
+                    child: BusyFilledButton(
+                      label: '이체',
+                      busy: false,
+                      onPressed: _canSubmit(mine) ? () => _submit() : null,
+                    ),
                   ),
                 ],
               ),
@@ -353,7 +481,7 @@ class _CompleteStep extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final verb = created.isPayment ? '결제' : '요청';
+    const verb = '이체';
     final amount = formatUsd(created.dollars * 100);
 
     return SingleChildScrollView(
@@ -364,7 +492,11 @@ class _CompleteStep extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(Icons.check_circle_outline, size: 64, color: theme.colorScheme.primary),
+              Icon(
+                Icons.check_circle_outline,
+                size: 64,
+                color: theme.colorScheme.primary,
+              ),
               const SizedBox(height: 16),
               TestId(
                 'transaction-create-result',
@@ -377,7 +509,10 @@ class _CompleteStep extends ConsumerWidget {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 4),
-                    Text('메모: ${created.description}', textAlign: TextAlign.center),
+                    Text(
+                      '메모: ${created.description}',
+                      textAlign: TextAlign.center,
+                    ),
                   ],
                 ),
               ),
@@ -395,7 +530,8 @@ class _CompleteStep extends ConsumerWidget {
               TestId(
                 'new-transaction-create-another-transaction',
                 child: OutlinedButton(
-                  onPressed: () => ref.read(createTransactionProvider.notifier).startOver(),
+                  onPressed: () =>
+                      ref.read(createTransactionProvider.notifier).startOver(),
                   child: const Text('다른 거래 만들기'),
                 ),
               ),

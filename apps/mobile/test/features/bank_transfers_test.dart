@@ -295,7 +295,7 @@ void main() {
 
       // The app does not stop the request. The server answered 400.
       expect(server.calls, contains('POST /bankTransfers'));
-      expect(find.text('잔액이 너무 커져서 입금할 수 없습니다.'), findsOneWidget);
+      expect(find.text('계좌 잔액 한도를 넘어서 입금할 수 없습니다'), findsOneWidget);
       expect(byId('bank-transfer-error'), findsOneWidget);
       expect(byId('bank-transfer-dialog'), findsOneWidget); // still open
       expect(server.accounts.first['balance'], 2147483000);
@@ -341,16 +341,16 @@ void main() {
 
       server.moveMoneyStatus = 422;
       await tapId(tester, 'bank-transfer-submit');
-      expect(find.text('입력한 내용을 확인해 주세요.'), findsOneWidget);
+      expect(find.text('입금하지 못했습니다 (refused)'), findsOneWidget);
 
       server.moveMoneyStatus = 500;
       await tapId(tester, 'bank-transfer-submit');
-      expect(find.text('입금하지 못했습니다. 잠시 후 다시 시도해 주세요.'), findsOneWidget);
+      expect(find.text('입금하지 못했습니다 (refused)'), findsOneWidget);
 
       server.moveMoneyStatus = null;
       server.down = true;
       await tapId(tester, 'bank-transfer-submit');
-      expect(find.text('서버에 연결할 수 없습니다.'), findsOneWidget);
+      expect(find.text('서버에서 처리하지 못했습니다. 잠시 뒤 다시 시도하세요'), findsOneWidget);
     });
   });
 
@@ -411,16 +411,17 @@ void main() {
             ApiException(text, statusCode: status),
             isDeposit: deposit,
           );
-      expect(msg('not enough balance', status: 400), '잔액이 부족합니다.');
-      expect(msg('the balance would be too large', status: 400, deposit: true), '잔액이 너무 커져서 입금할 수 없습니다.');
-      expect(msg('this bank account was deleted', status: 400), '삭제된 은행 계좌입니다.');
-      expect(msg('bank account not found', status: 404), '이 은행 계좌를 사용할 수 없습니다.');
-      expect(msg('this is not your bank account', status: 403), '이 은행 계좌를 사용할 수 없습니다.');
-      expect(msg('Request failed', status: 422), '입력한 내용을 확인해 주세요.');
-      expect(msg('x', status: 500), '출금하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+      expect(msg('not enough balance', status: 400), '선택한 계좌의 잔액이 부족합니다');
+      expect(msg('the balance would be too large', status: 400, deposit: true), '계좌 잔액 한도를 넘어서 입금할 수 없습니다');
+      expect(msg('this bank account was deleted', status: 400), '삭제된 계좌입니다');
+      expect(msg('bank account not found', status: 404), '은행 계좌를 찾을 수 없습니다');
+      expect(msg('this is not your bank account', status: 403), '선택한 계좌를 사용할 수 없습니다');
+      // A reason that is not in the table: the sentence and the server's reason in brackets.
+      expect(msg('boom', status: 500), '출금하지 못했습니다 (boom)');
+      expect(msg('boom', status: 500, deposit: true), '입금하지 못했습니다 (boom)');
       expect(
         bankTransferErrorMessage(const ApiException('x', isConnection: true), isDeposit: true),
-        '서버에 연결할 수 없습니다.',
+        '서버에서 처리하지 못했습니다. 잠시 뒤 다시 시도하세요',
       );
     });
   });

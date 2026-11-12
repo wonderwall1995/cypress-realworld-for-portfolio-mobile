@@ -7,7 +7,7 @@ import 'transaction_filter_bar.dart';
 import 'transaction_list_view.dart';
 
 /// The "홈" tab: a "새 거래" button on the left of the tab row, then three
-/// lists (전체, 친구, 내 거래) under tabs.
+/// lists (전체, 내 거래) under tabs.
 class TransactionsPage extends StatelessWidget {
   const TransactionsPage({super.key});
 

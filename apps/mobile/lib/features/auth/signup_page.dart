@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/test_id.dart';
+import '../about/original_project_link.dart';
 import '../settings/phone_rule.dart';
 import 'auth_widgets.dart';
 
@@ -99,7 +100,9 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                         style: Theme.of(context).textTheme.headlineMedium,
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 4),
+                    const OriginalProjectLink(id: 'signup-original-link'),
+                    const SizedBox(height: 20),
                     if (_error != null) ...[
                       FormErrorBanner(id: 'signup-error', message: _error!),
                       const SizedBox(height: 16),

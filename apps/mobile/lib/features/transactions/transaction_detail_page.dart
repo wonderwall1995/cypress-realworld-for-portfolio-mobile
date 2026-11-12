@@ -5,12 +5,12 @@ import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/session.dart';
 import '../../core/test_id.dart';
+import '../bank_accounts/bank_accounts_controller.dart';
 import 'transaction.dart';
 import 'transaction_feed_controller.dart';
 import 'transaction_widgets.dart';
 
-/// One transaction. The receiver of a pending request can accept or reject it.
-/// Everyone can like it once and write comments.
+/// One transaction. Everyone can like it once and write comments.
 class TransactionDetailPage extends ConsumerWidget {
   const TransactionDetailPage({required this.transactionId, super.key});
 
@@ -54,6 +54,7 @@ class TransactionDetailPage extends ConsumerWidget {
 Future<void> _reloadAfterChange(WidgetRef ref, String transactionId) async {
   ref.invalidate(transactionDetailProvider(transactionId));
   ref.invalidate(transactionFeedProvider);
+  await ref.read(bankAccountsProvider.notifier).reload();
   await ref.read(sessionProvider.notifier).refreshUser();
 }
 
@@ -76,65 +77,6 @@ class _DetailBody extends ConsumerStatefulWidget {
 
 class _DetailBodyState extends ConsumerState<_DetailBody> {
   bool _busy = false;
-
-  Future<bool> _confirmAccept() async {
-    final t = widget.transaction;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('요청 수락'),
-        content: Text('${t.senderName}님에게 ${formatUsd(t.amount)}를 보냅니다. 수락하시겠습니까?'),
-        actions: [
-          TestId(
-            'transaction-accept-cancel',
-            child: TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('취소'),
-            ),
-          ),
-          TestId(
-            'transaction-accept-confirm',
-            child: TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('수락'),
-            ),
-          ),
-        ],
-      ),
-    );
-    return confirmed == true;
-  }
-
-  /// [status] is `accepted` or `rejected`. Accept asks first (money moves).
-  Future<void> _resolve(String status) async {
-    if (_busy) return;
-    final id = widget.transaction.id;
-    if (status == 'accepted' && !await _confirmAccept()) return;
-    if (!mounted) return;
-
-    setState(() => _busy = true);
-    try {
-      await ref.read(apiClientProvider).updateRequestStatus(id, status);
-      if (!mounted) return;
-      _showMessage(
-        context,
-        status == 'accepted' ? '요청을 수락했습니다.' : '요청을 거절했습니다.',
-        success: true,
-      );
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      if (e.statusCode == 409) {
-        _showMessage(context, '이미 처리된 요청입니다.', success: false);
-      } else if (e.isConnection) {
-        _showMessage(context, '서버에 연결할 수 없습니다.', success: false);
-      } else {
-        _showMessage(context, '요청을 처리하지 못했습니다.', success: false);
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-    await _reloadAfterChange(ref, id);
-  }
 
   /// One like per user. (The server would accept a second one, so the button
   /// is off after the first, like on the web.)
@@ -165,7 +107,6 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
     final currentUserId = ref.watch(sessionProvider.select((s) => s.user?['id'])) as String?;
-    final canResolve = transaction.isPendingRequest && transaction.receiverId == currentUserId;
     final liked = transaction.isLikedBy(currentUserId);
 
     return Column(
@@ -181,7 +122,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   children: [
                     Row(
                       children: [
-                        TestId('transaction-sender-avatar', child: InitialAvatar(transaction.senderName, radius: 28)),
+                        TestId('transaction-sender-avatar', child: TransactionSenderAvatar(transaction, radius: 28)),
                         const SizedBox(width: 8),
                         TestId('transaction-receiver-avatar', child: InitialAvatar(transaction.receiverName, radius: 28)),
                       ],
@@ -221,32 +162,6 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                         ),
                       ],
                     ),
-                    if (canResolve) ...[
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TestId(
-                              'transaction-reject-request-${transaction.id}',
-                              child: OutlinedButton(
-                                onPressed: _busy ? null : () => _resolve('rejected'),
-                                child: const Text('거절'),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TestId(
-                              'transaction-accept-request-${transaction.id}',
-                              child: FilledButton(
-                                onPressed: _busy ? null : () => _resolve('accepted'),
-                                child: const Text('수락'),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
                     const SizedBox(height: 24),
                     const Divider(height: 1),
                     const SizedBox(height: 12),

@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:cypress_realworld_for_personal_portfolio_mobile/core/api_client.dart';
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
@@ -41,9 +45,11 @@ Map<String, dynamic> testTransaction(
   String? receiverId,
   List<String>? likedBy,
   List<String>? commentTexts,
+  String createdAt = '2026-11-10T03:04:05.000Z',
 }) =>
     {
       'id': id,
+      'createdAt': createdAt,
       'senderId': senderId ?? 's-$id',
       'receiverId': receiverId ?? 'r-$id',
       'senderName': sender,
@@ -148,7 +154,6 @@ class FakeServer {
 
   /// The three transaction lists (web tabs: Everyone, Friends, Mine).
   final List<Map<String, dynamic>> everyone = [];
-  final List<Map<String, dynamic>> friends = [];
   final List<Map<String, dynamic>> mine = [];
 
   /// The signed-in user's balance in cents. Payments and accepted requests change it.
@@ -175,6 +180,32 @@ class FakeServer {
   /// Status code for `POST /bankTransfers` (null = the real rules below).
   int? moveMoneyStatus;
 
+  /// The open `GET /notifications/stream` connections (Server-Sent Events).
+  final List<StreamController<List<int>>> streams = [];
+
+  /// A status for `GET /notifications/stream` (null = it opens and stays open).
+  int? streamStatus;
+
+  /// Sends a notification to every open stream, as the server does.
+  void push(Map<String, dynamic> notification) => _write('event: notification\ndata: ${jsonEncode(notification)}\n\n');
+
+  /// The server's 25-second ping.
+  void ping() => _write(': ping\n\n');
+
+  void _write(String text) {
+    for (final stream in streams) {
+      stream.add(utf8.encode(text));
+    }
+  }
+
+  /// The server (or the network) closes every open stream.
+  void closeStreams() {
+    for (final stream in [...streams]) {
+      stream.close();
+    }
+    streams.clear();
+  }
+
   /// Unread notifications. Marking one as read removes it from the list.
   final List<Map<String, dynamic>> notifications = [];
   bool failNotifications = false;
@@ -183,13 +214,29 @@ class FakeServer {
   bool failComment = false;
 
   Map<String, dynamic>? _transaction(String id) {
-    final all = [...everyone, ...friends, ...mine];
+    final all = [...everyone, ...mine];
     final found = all.where((t) => t['id'] == id);
     return found.isEmpty ? null : found.first;
   }
 
+  /// The password of the signed-in user (what `POST /users/verifyPassword` accepts).
+  String password = 'pw-1234';
+
+  /// The bank accounts of other users, by user id. A user that is not here has one
+  /// account (the server shows only the id, the bank and the last 4 digits).
+  final Map<String, List<Map<String, dynamic>>> otherAccounts = {};
+
+  List<Map<String, dynamic>> _otherAccountsOf(String userId) =>
+      otherAccounts[userId] ??
+      [
+        {'id': 'o-$userId', 'bankName': 'Other Bank', 'accountNumberLast4': '5555'},
+      ];
+
   /// Status code for `POST /transactions` (null = success).
   int? createTransactionStatus;
+
+  /// The `error` text of that refusal.
+  String createTransactionMessage = 'refused';
 
   /// Status code for `PATCH /transactions/:id` (null = the real rules: 409 if resolved).
   int? updateTransactionStatus;
@@ -209,7 +256,6 @@ class FakeServer {
 
   Map<String, List<Map<String, dynamic>>> get _feeds => {
         '/transactions/public': everyone,
-        '/transactions/contacts': friends,
         '/transactions': mine,
       };
 
@@ -270,11 +316,39 @@ class FakeServer {
         return jsonBody(200, {'results': found.toList()});
       case 'POST /transactions':
         if (createTransactionStatus != null) {
-          return jsonBody(createTransactionStatus!, {'error': 'refused'});
+          return jsonBody(createTransactionStatus!, {'error': createTransactionMessage});
         }
         final body = o.data as Map<String, dynamic>;
         final receiver = users.firstWhere((u) => u['id'] == body['receiverId']);
         final isRequest = body['transactionType'] == 'request';
+        // The real rules: my account is always needed; a payment also needs the
+        // other account and the password, and the account must hold enough.
+        final myId = body['myAccountId'];
+        if (myId is! String) {
+          return jsonBody(422, {
+            'errors': [
+              {'msg': 'Invalid value', 'param': 'myAccountId', 'location': 'body'},
+            ],
+          });
+        }
+        final mineFound = accounts.where((a) => a['id'] == myId && a['isDeleted'] != true);
+        if (mineFound.isEmpty) return jsonBody(404, {'error': 'bank account not found'});
+        final myAccount = mineFound.first;
+        final cents = (body['amount'] as int) * 100;
+        if (!isRequest) {
+          if (body['password'] != password) return jsonBody(403, {'error': 'password is wrong'});
+          if (body['otherAccountId'] is! String) {
+            return jsonBody(422, {
+              'errors': [
+                {'msg': 'Invalid value', 'param': 'otherAccountId', 'location': 'body'},
+              ],
+            });
+          }
+          if ((myAccount['balance'] as int? ?? 0) < cents) {
+            return jsonBody(400, {'error': 'not enough balance in this bank account'});
+          }
+          myAccount['balance'] = (myAccount['balance'] as int? ?? 0) - cents;
+        }
         final created = testTransaction(
           'new${_nextId++}',
           sender: 'Ada Kim',
@@ -286,9 +360,18 @@ class FakeServer {
           senderId: 'u1',
           receiverId: receiver['id'] as String,
         );
+        created['myAccount'] = {
+          'bankName': myAccount['bankName'],
+          if (!isRequest) 'balanceAfter': myAccount['balance'],
+        };
         mine.insert(0, created);
         if (!isRequest) balance -= created['amount'] as int;
         return jsonBody(200, {'transaction': created});
+      case 'POST /users/verifyPassword':
+        final given = (o.data as Map<String, dynamic>)['password'];
+        return given == password
+            ? ResponseBody.fromString('', 204)
+            : jsonBody(403, {'error': 'password is wrong'});
       case 'POST /logout':
         signedIn = false;
         return ResponseBody.fromString('', 302);
@@ -302,6 +385,10 @@ class FakeServer {
         final account = {'id': 'new${_nextId++}', ...body, 'isDeleted': false, 'balance': 0};
         accounts.add(account);
         return jsonBody(200, {'account': account});
+    }
+    if (o.method == 'GET' && o.path.startsWith('/bankAccounts/of-user/')) {
+      final userId = o.path.substring('/bankAccounts/of-user/'.length);
+      return jsonBody(200, {'results': _otherAccountsOf(userId)});
     }
     final feed = _feeds[o.path];
     if (o.method == 'GET' && feed != null) {
@@ -329,7 +416,7 @@ class FakeServer {
     if (o.method == 'GET' && o.path.startsWith('/transactions/')) {
       if (failTransactionDetail) return jsonBody(500, {'error': 'boom'});
       final id = o.path.substring('/transactions/'.length);
-      final all = [...everyone, ...friends, ...mine];
+      final all = [...everyone, ...mine];
       final found = all.where((t) => t['id'] == id);
       return found.isEmpty
           ? jsonBody(404, {'error': 'not found'})
@@ -390,11 +477,39 @@ class FakeServer {
       );
       if (type == 'deposit') {
         account.first['balance'] = after;
+        // Like the newer server: a deposit also makes an "외부 입금" transaction. It is
+        // in everyone's list (only the user's own deposits) and in the user's own,
+        // never in the friends' list.
+        final deposit = testTransaction(
+          'dep${_nextId++}',
+          sender: '외부 입금',
+          receiver: 'Kim Ada',
+          description: '외부 입금',
+          amount: cents,
+          senderId: 'external-deposit',
+          receiverId: 'u1',
+        )..['source'] = body['bankAccountId'];
+        everyone.insert(0, deposit);
+        mine.insert(0, deposit);
       } else {
         balance = after;
       }
       transfers.add(transfer);
       return jsonBody(201, {'transfer': transfer});
+    }
+    if (o.method == 'GET' && o.path == '/notifications/stream') {
+      if (!signedIn) return jsonBody(401, {'error': 'User is unauthorized'});
+      if (streamStatus != null) return jsonBody(streamStatus!, {'error': 'no stream'});
+      final controller = StreamController<List<int>>();
+      streams.add(controller);
+      controller.add(utf8.encode('retry: 5000\n\n'));
+      return ResponseBody(
+        controller.stream.map(Uint8List.fromList),
+        200,
+        headers: {
+          Headers.contentTypeHeader: ['text/event-stream'],
+        },
+      );
     }
     if (o.method == 'GET' && o.path == '/notifications') {
       return failNotifications
@@ -432,7 +547,7 @@ class FakeServer {
         return jsonBody(updateTransactionStatus!, {'error': 'refused'});
       }
       final id = o.path.substring('/transactions/'.length);
-      final all = [...everyone, ...friends, ...mine];
+      final all = [...everyone, ...mine];
       final found = all.where((t) => t['id'] == id);
       if (found.isEmpty) return jsonBody(404, {'error': 'not found'});
       final t = found.first;
@@ -440,17 +555,31 @@ class FakeServer {
       if (t['requestStatus'] != 'pending') {
         return jsonBody(409, {'error': 'this request is already ${t['requestStatus']}'});
       }
-      final status = (o.data as Map<String, dynamic>)['requestStatus'] as String;
-      t['requestStatus'] = status;
+      final patch = o.data as Map<String, dynamic>;
+      final status = patch['requestStatus'] as String;
       if (status == 'accepted') {
+        // The real rules: the paying account and the password are needed, and the
+        // account must hold enough.
+        if (patch['password'] != password) return jsonBody(403, {'error': 'password is wrong'});
+        final payer = accounts.where((a) => a['id'] == patch['payerAccountId'] && a['isDeleted'] != true);
+        if (payer.isEmpty) return jsonBody(404, {'error': 'bank account not found'});
+        final cents = t['amount'] as int;
+        if ((payer.first['balance'] as int? ?? 0) < cents) {
+          return jsonBody(400, {'error': 'not enough balance in this bank account'});
+        }
+        payer.first['balance'] = (payer.first['balance'] as int? ?? 0) - cents;
         t['status'] = 'complete';
-        balance -= t['amount'] as int; // the receiver (the signed-in user) pays
+        balance -= cents; // the receiver (the signed-in user) pays
       }
+      t['requestStatus'] = status;
       return ResponseBody.fromString('', 204);
     }
     if (o.method == 'DELETE' && o.path.startsWith('/bankAccounts/')) {
       if (failAccountDelete) return jsonBody(500, {'error': 'boom'});
       final id = o.path.substring('/bankAccounts/'.length);
+      if (accounts.any((a) => a['id'] == id && (a['balance'] as int? ?? 0) != 0)) {
+        return jsonBody(400, {'error': 'an account that holds money cannot be deleted'});
+      }
       for (final a in accounts.where((a) => a['id'] == id)) {
         a['isDeleted'] = true; // soft delete, as on the real server
       }

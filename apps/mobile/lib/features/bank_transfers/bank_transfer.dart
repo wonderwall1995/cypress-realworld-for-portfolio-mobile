@@ -1,4 +1,5 @@
 import '../../core/api_client.dart';
+import '../../core/error_text.dart';
 
 /// A deposit or a withdrawal, as the server sends it.
 class BankTransfer {
@@ -63,19 +64,5 @@ class BankTransfer {
 }
 
 /// Korean text for what the server says when it refuses a deposit or withdrawal.
-String bankTransferErrorMessage(ApiException e, {required bool isDeposit}) {
-  if (e.isConnection) return '서버에 연결할 수 없습니다.';
-  switch (e.message) {
-    case 'not enough balance':
-      return '잔액이 부족합니다.';
-    case 'the balance would be too large':
-      return '잔액이 너무 커져서 입금할 수 없습니다.';
-    case 'this bank account was deleted':
-      return '삭제된 은행 계좌입니다.';
-    case 'bank account not found':
-    case 'this is not your bank account':
-      return '이 은행 계좌를 사용할 수 없습니다.';
-  }
-  if (e.statusCode == 422) return '입력한 내용을 확인해 주세요.';
-  return '${isDeposit ? '입금' : '출금'}하지 못했습니다. 잠시 후 다시 시도해 주세요.';
-}
+String bankTransferErrorMessage(ApiException e, {required bool isDeposit}) =>
+    isDeposit ? depositRefusalText(e) : serverRefusalText(e, base: '출금하지 못했습니다');

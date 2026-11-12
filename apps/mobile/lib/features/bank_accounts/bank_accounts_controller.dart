@@ -51,6 +51,18 @@ class BankAccountsController extends AsyncNotifier<List<BankAccount>> {
   }
 }
 
+/// Why the server refused the last delete, shown above the list. Null when there
+/// is nothing to say (it is cleared by the next delete).
+class BankAccountDeleteError extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void set(String? message) => state = message;
+}
+
+final bankAccountDeleteErrorProvider =
+    NotifierProvider<BankAccountDeleteError, String?>(BankAccountDeleteError.new);
+
 final bankAccountsProvider =
     AsyncNotifierProvider<BankAccountsController, List<BankAccount>>(
   BankAccountsController.new,

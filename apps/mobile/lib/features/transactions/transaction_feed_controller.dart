@@ -6,10 +6,9 @@ import '../../core/session.dart';
 import 'transaction.dart';
 import 'transaction_filters.dart';
 
-/// The three lists on the home screen (same as the web tabs).
+/// The two lists on the home screen (same as the web tabs).
 enum TransactionFeed {
   everyone('/transactions/public', 'nav-public-tab', '전체'),
-  friends('/transactions/contacts', 'nav-contacts-tab', '친구'),
   mine('/transactions', 'nav-personal-tab', '내 거래');
 
   const TransactionFeed(this.path, this.tabId, this.label);

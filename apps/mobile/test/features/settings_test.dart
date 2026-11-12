@@ -1,4 +1,3 @@
-import 'package:cypress_realworld_for_personal_portfolio_mobile/core/toast.dart';
 import 'package:cypress_realworld_for_personal_portfolio_mobile/features/settings/phone_rule.dart';
 import 'package:cypress_realworld_for_personal_portfolio_mobile/features/settings/settings_page.dart';
 import 'package:flutter/material.dart';
@@ -62,7 +61,7 @@ void main() {
         ..profile.addAll({
           'email': 'saved@example.test',
           'phoneNumber': '010-9999-8888',
-          'defaultPrivacyLevel': 'contacts',
+          'defaultPrivacyLevel': 'private',
         });
       await pumpApp(tester, server);
       await openSettings(tester);
@@ -71,7 +70,7 @@ void main() {
       expect(textOf(tester, 'user-settings-lastName-input'), 'Kim');
       expect(textOf(tester, 'user-settings-email-input'), 'saved@example.test');
       expect(textOf(tester, 'user-settings-phoneNumber-input'), '010-9999-8888');
-      expect(tester.widget<ChoiceChip>(find.descendant(of: byId('user-settings-privacy-contacts'), matching: find.byType(ChoiceChip))).selected, isTrue);
+      expect(tester.widget<ChoiceChip>(find.descendant(of: byId('user-settings-privacy-private'), matching: find.byType(ChoiceChip))).selected, isTrue);
     });
 
     testWidgets('a user with no saved privacy shows 공개', (tester) async {
@@ -82,13 +81,13 @@ void main() {
           .widget<ChoiceChip>(find.descendant(of: byId('user-settings-privacy-$v'), matching: find.byType(ChoiceChip)))
           .selected;
       expect(selected('public'), isTrue);
-      expect(selected('contacts'), isFalse);
+      expect(byId('user-settings-privacy-contacts'), findsNothing); // only 공개 and 비공개
       expect(selected('private'), isFalse);
     });
   });
 
   group('checks before saving', () {
-    testWidgets('all four fields are required', (tester) async {
+    testWidgets('the names are required; email and phone may be empty', (tester) async {
       final server = newServer();
       await pumpApp(tester, server);
       await openSettings(tester);
@@ -98,9 +97,23 @@ void main() {
 
       expect(find.text('이름을 입력하세요.'), findsOneWidget);
       expect(find.text('성을 입력하세요.'), findsOneWidget);
-      expect(find.text('이메일 주소를 입력하세요.'), findsOneWidget);
-      expect(find.text('전화번호를 입력하세요.'), findsOneWidget);
+      expect(find.text('이메일 주소를 입력하세요.'), findsNothing);
+      expect(find.text('전화번호를 입력하세요.'), findsNothing);
       expect(server.calls.where((c) => c.startsWith('PATCH /users')), isEmpty);
+    });
+
+    testWidgets('an empty email and phone are saved as empty', (tester) async {
+      final server = newServer();
+      await pumpApp(tester, server);
+      await openSettings(tester);
+
+      await fill(tester, email: '', phone: '');
+      await tapId(tester, 'user-settings-submit');
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(server.bodies['PATCH /users/u1'], containsPair('email', ''));
+      expect(server.bodies['PATCH /users/u1'], containsPair('phoneNumber', ''));
+      expect(find.text('설정 저장 성공'), findsOneWidget);
     });
 
     testWidgets('a bad email is refused', (tester) async {
@@ -138,7 +151,7 @@ void main() {
   });
 
   group('saving', () {
-    testWidgets('sends the five values to the user\'s own id, and shows a small toast', (tester) async {
+    testWidgets('sends the five values to the user\'s own id, and says it worked', (tester) async {
       final server = newServer();
       await pumpApp(tester, server);
       await openSettings(tester);
@@ -155,45 +168,13 @@ void main() {
         'phoneNumber': '010-1234-5678',
         'defaultPrivacyLevel': 'private',
       });
-      expect(byId('alert-bar-success'), findsOneWidget);
-      final toast = tester.widget<Text>(find.descendant(of: byId('alert-bar-success'), matching: find.byType(Text)));
-      expect(toast.data, '저장했습니다.');
-      expect(toast.style?.fontSize, 10); // a small text
+      final result = tester.widget<Text>(find.descendant(of: byId('user-settings-result'), matching: find.byType(Text)));
+      expect(result.data, '설정 저장 성공');
+      expect(result.style?.color, Colors.green.shade700);
+      // The result sits above the 저장 button.
+      expect(tester.getRect(byId('user-settings-result')).bottom, lessThanOrEqualTo(tester.getRect(byId('user-settings-submit')).top));
       // It stays on the settings screen.
       expect(byId('user-settings-form'), findsOneWidget);
-    });
-
-    testWidgets('the success toast is light green, rounded, and in the middle of the screen', (tester) async {
-      await pumpApp(tester, newServer());
-      await openSettings(tester);
-      await fill(tester);
-      await saveAndLookAtToast(tester);
-
-      final material = tester.widget<Material>(
-        find.ancestor(of: byId('alert-bar-success'), matching: find.byType(Material)).first,
-      );
-      expect(material.color, ToastColors.success.background);
-      final shape = material.shape! as RoundedRectangleBorder;
-      expect(shape.borderRadius, BorderRadius.circular(20));
-      final center = tester.getCenter(byId('alert-bar-success'));
-      final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
-      expect(center.dx, closeTo(screen.width / 2, 1));
-      expect(center.dy, closeTo(screen.height / 2, 1));
-      expect(byId('alert-bar-error'), findsNothing);
-    });
-
-    testWidgets('the toast goes away after two seconds', (tester) async {
-      await pumpApp(tester, newServer());
-      await openSettings(tester);
-      await fill(tester);
-      await saveAndLookAtToast(tester);
-      expect(byId('alert-bar-success'), findsOneWidget);
-
-      for (var i = 0; i < 5; i++) {
-        await tester.pump(const Duration(milliseconds: 500));
-      }
-
-      expect(byId('alert-bar-success'), findsNothing);
     });
 
     testWidgets('the new name shows on the 내 계좌 tab after saving', (tester) async {
@@ -244,16 +225,22 @@ void main() {
       await fill(tester, email: 'keep@example.test');
       await saveAndLookAtToast(tester);
 
-      expect(find.text('저장하지 못했습니다. 입력한 내용을 확인해 주세요.'), findsOneWidget);
-      expect(byId('user-settings-error'), findsOneWidget);
+      expect(find.text('설정 저장 실패: 입력한 내용을 확인해 주세요.'), findsOneWidget);
+      expect(find.text('설정 저장 성공'), findsNothing);
       expect(textOf(tester, 'user-settings-email-input'), 'keep@example.test');
-      // A pink failure toast too, and no success toast.
-      expect(byId('alert-bar-success'), findsNothing);
-      final material = tester.widget<Material>(
-        find.ancestor(of: byId('alert-bar-error'), matching: find.byType(Material)).first,
-      );
-      expect(material.color, ToastColors.failure.background);
-      expect(find.text('저장하지 못했습니다.'), findsOneWidget);
+    });
+
+    testWidgets('the result goes away when a field is edited', (tester) async {
+      await pumpApp(tester, newServer());
+      await openSettings(tester);
+      await fill(tester);
+      await saveAndLookAtToast(tester);
+      expect(find.text('설정 저장 성공'), findsOneWidget);
+
+      await enter(tester, 'user-settings-firstName-input', 'Eve');
+      await tester.pump();
+
+      expect(find.text('설정 저장 성공'), findsNothing);
     });
 
     testWidgets('a server that cannot be reached says so', (tester) async {
@@ -265,7 +252,7 @@ void main() {
       server.down = true;
       await tapId(tester, 'user-settings-submit');
 
-      expect(find.text('서버에 연결할 수 없습니다.'), findsOneWidget);
+      expect(find.text('설정 저장 실패: 서버에 연결할 수 없습니다.'), findsOneWidget);
     });
   });
 
@@ -290,7 +277,7 @@ void main() {
     test('email', () {
       expect(validateEmail('a@b.co'), isNull);
       expect(validateEmail('first.last+tag@sub.example.test'), isNull);
-      expect(validateEmail(''), '이메일 주소를 입력하세요.');
+      expect(validateEmail(''), isNull); // empty is allowed in settings
       expect(validateEmail('a@'), '올바른 이메일 주소를 입력하세요.');
       expect(validateEmail('a b@c.de'), '올바른 이메일 주소를 입력하세요.');
     });

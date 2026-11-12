@@ -55,7 +55,7 @@ class MyAccountPage extends ConsumerWidget {
                     children: [
                       TestId(
                         'my-account-full-name',
-                        child: Text(fullName, style: theme.textTheme.titleMedium),
+                        child: Text(fullName, style: theme.textTheme.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
                       ),
                       TestId(
                         'my-account-username',
