@@ -30,7 +30,7 @@ void main() {
       expect(AppNotification.fromJson(testNotification('n', 'requested', name: 'Bob Test'))!.message,
           'Bob Test님이 결제를 요청했습니다.');
       expect(AppNotification.fromJson(testNotification('n', 'received', name: 'Ada Kim'))!.message,
-          'Ada Kim님이 결제를 받았습니다.');
+          'Ada Kim님이 이체했습니다.');
     });
   });
 

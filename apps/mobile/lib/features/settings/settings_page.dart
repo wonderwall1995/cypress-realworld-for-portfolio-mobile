@@ -6,7 +6,6 @@ import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/session.dart';
 import '../../core/test_id.dart';
-import '../../core/toast.dart';
 import '../auth/auth_widgets.dart';
 import '../transactions/transaction_widgets.dart';
 import 'phone_rule.dart';
@@ -17,9 +16,10 @@ final _emailPattern = RegExp(
   r'(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$',
 );
 
+/// Settings may leave the email empty (the server stores nothing then).
 String? validateEmail(String? value) {
   final text = value?.trim() ?? '';
-  if (text.isEmpty) return '이메일 주소를 입력하세요.';
+  if (text.isEmpty) return null;
   if (!_emailPattern.hasMatch(text)) return '올바른 이메일 주소를 입력하세요.';
   return null;
 }
@@ -27,13 +27,13 @@ String? validateEmail(String? value) {
 /// The values the server knows, with the words the user sees.
 const privacyChoices = [
   (value: 'public', label: '공개'),
-  (value: 'contacts', label: '친구'),
   (value: 'private', label: '비공개'),
 ];
 
-String saveErrorMessage(ApiException e) {
+/// The reason shown after "설정 저장 실패: ".
+String saveErrorReason(ApiException e) {
   if (e.isConnection) return '서버에 연결할 수 없습니다.';
-  return '저장하지 못했습니다. 입력한 내용을 확인해 주세요.';
+  return '입력한 내용을 확인해 주세요.';
 }
 
 /// "설정": the user's own profile (same fields as the web) and the default
@@ -53,7 +53,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   late final TextEditingController _phone;
   late String _privacy;
   bool _busy = false;
-  String? _error;
+  /// What happened at the last save: null until then, and again after an edit.
+  ({bool success, String text})? _result;
 
   @override
   void initState() {
@@ -83,12 +84,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     if (!_formKey.currentState!.validate()) return;
     final userId = ref.read(sessionProvider).user?['id'] as String?;
     if (userId == null) return;
-    // Keep these before the await: the page may be gone after it.
-    final overlay = Overlay.of(context, rootOverlay: true);
-
     setState(() {
       _busy = true;
-      _error = null;
+      _result = null;
     });
     try {
       await ref.read(apiClientProvider).updateUser(
@@ -101,11 +99,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           );
       // Load the user again: the name on the 내 계좌 tab and in the menu changes.
       await ref.read(sessionProvider.notifier).refreshUser();
-      showToast(overlay, message: '저장했습니다.', success: true);
-    } on ApiException catch (e) {
-      showToast(overlay, message: '저장하지 못했습니다.', success: false);
       if (!mounted) return;
-      setState(() => _error = saveErrorMessage(e));
+      setState(() => _result = (success: true, text: '설정 저장 성공'));
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _result = (success: false, text: '설정 저장 실패: ${saveErrorReason(e)}'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -133,6 +131,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 'user-settings-form',
                 child: Form(
                   key: _formKey,
+                  // Editing anything makes the old result disappear.
+                  onChanged: () {
+                    if (_result != null) setState(() => _result = null);
+                  },
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -147,10 +149,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         ],
                       ),
                       const SizedBox(height: 24),
-                      if (_error != null) ...[
-                        FormErrorBanner(id: 'user-settings-error', message: _error!),
-                        const SizedBox(height: 16),
-                      ],
                       TestId(
                         'user-settings-firstName-input',
                         child: TextFormField(
@@ -191,7 +189,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           keyboardType: TextInputType.phone,
                           textInputAction: TextInputAction.done,
                           onFieldSubmitted: (_) => _save(),
-                          validator: validatePhoneNumber,
+                          validator: (v) =>
+                              (v == null || v.trim().isEmpty) ? null : validatePhoneNumber(v),
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -214,7 +213,23 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
+                      // The place of the result stays, so the form does not jump.
+                      SizedBox(
+                        height: 20,
+                        child: _result == null
+                            ? null
+                            : TestId(
+                                'user-settings-result',
+                                child: Text(
+                                  _result!.text,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: _result!.success ? Colors.green.shade700 : theme.colorScheme.error,
+                                  ),
+                                ),
+                              ),
+                      ),
+                      const SizedBox(height: 4),
                       TestId(
                         'user-settings-submit',
                         child: BusyFilledButton(label: '저장', busy: _busy, onPressed: _save),

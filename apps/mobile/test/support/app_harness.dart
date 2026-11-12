@@ -1,5 +1,6 @@
 import 'package:cypress_realworld_for_personal_portfolio_mobile/app.dart';
 import 'package:cypress_realworld_for_personal_portfolio_mobile/core/providers.dart';
+import 'package:cypress_realworld_for_personal_portfolio_mobile/features/notifications/notification_live_sync.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -20,6 +21,9 @@ Future<void> pumpApp(
   // A tall screen by default, so a whole form is visible.
   Size size = const Size(800, 1600),
   List<Override> overrides = const [],
+  // The live notification connection is off in most tests: it keeps a stream and
+  // timers open.
+  bool live = false,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -27,7 +31,11 @@ Future<void> pumpApp(
 
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [apiClientProvider.overrideWithValue(server.client()), ...overrides],
+      overrides: [
+        apiClientProvider.overrideWithValue(server.client()),
+        liveNotificationsEnabledProvider.overrideWithValue(live),
+        ...overrides,
+      ],
       child: const App(),
     ),
   );

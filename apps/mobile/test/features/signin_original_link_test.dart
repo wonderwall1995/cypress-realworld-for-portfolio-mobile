@@ -74,4 +74,15 @@ void main() {
     final semantics = tester.getSemantics(find.descendant(of: byId('signin-original-link'), matching: find.byType(Text)));
     expect(semantics.getSemanticsData().flagsCollection.isLink, isTrue);
   });
+
+  testWidgets('the sign-up screen says it too, under the title', (tester) async {
+    await pumpApp(tester, signedOutServer());
+    await tapId(tester, 'signup');
+    await tester.pumpAndSettle();
+
+    final title = tester.getRect(byId('signup-title'));
+    final notice = tester.getRect(byId('signup-original-link-notice'));
+    expect(notice.top, greaterThanOrEqualTo(title.bottom - 1));
+    expect(find.descendant(of: byId('signup-original-link'), matching: find.text('Realworld-app')), findsOneWidget);
+  });
 }

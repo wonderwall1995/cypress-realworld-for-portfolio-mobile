@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
 import '../../../core/session.dart';
+import '../../bank_accounts/bank_accounts_controller.dart';
+import '../../bank_accounts/other_account.dart';
 import '../transaction_feed_controller.dart';
 import 'user_summary.dart';
 
@@ -10,6 +12,13 @@ final usersProvider =
     FutureProvider.autoDispose.family<List<UserSummary>, String>((ref, query) async {
   final raw = await ref.watch(apiClientProvider).getUsers(query: query);
   return raw.map(UserSummary.fromJson).toList();
+});
+
+/// The bank accounts of the user who would receive the money.
+final otherAccountsProvider =
+    FutureProvider.autoDispose.family<List<OtherAccount>, String>((ref, userId) async {
+  final raw = await ref.watch(apiClientProvider).getAccountsOfUser(userId);
+  return raw.map(OtherAccount.fromJson).toList();
 });
 
 enum CreateStep { selectContact, payment, complete }
@@ -58,10 +67,15 @@ class CreateTransactionController extends Notifier<CreateState> {
   }
 
   /// Throws [ApiException] when the server refuses. [type] is `payment` or `request`.
+  /// A payment needs [otherAccountId] and the user's [password]; a request needs
+  /// only [myAccountId] (the account that will receive the money).
   Future<void> submit({
     required String type,
     required int dollars,
     required String description,
+    required String myAccountId,
+    String? otherAccountId,
+    String? password,
   }) async {
     final receiver = state.receiver;
     if (receiver == null) return;
@@ -71,6 +85,11 @@ class CreateTransactionController extends Notifier<CreateState> {
           receiverId: receiver.id,
           description: description,
           amount: dollars,
+          myAccountId: myAccountId,
+          otherAccountId: otherAccountId,
+          password: password,
+          // The user's own choice in the settings (public when there is none).
+          privacyLevel: _privacyLevel(),
         );
 
     state = CreateState(
@@ -84,9 +103,15 @@ class CreateTransactionController extends Notifier<CreateState> {
       ),
     );
 
-    // The lists and the balance have changed.
+    // The lists, the bank accounts and the balance have changed.
     ref.invalidate(transactionFeedProvider);
+    await ref.read(bankAccountsProvider.notifier).reload();
     await ref.read(sessionProvider.notifier).refreshUser();
+  }
+
+  String _privacyLevel() {
+    final saved = ref.read(sessionProvider).user?['defaultPrivacyLevel'];
+    return saved is String && const ['public', 'private'].contains(saved) ? saved : 'public';
   }
 }
 

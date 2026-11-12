@@ -27,16 +27,17 @@ Future<void> scrollList(WidgetTester tester, double dy) async {
 
 void main() {
   group('tabs', () {
-    testWidgets('home shows 3 tabs and loads only the first list', (tester) async {
+    testWidgets('home shows 2 tabs (no 친구) and loads only the first list', (tester) async {
       final server = newServer();
       await pumpApp(tester, server);
 
       expect(byId('nav-transaction-tabs'), findsOneWidget);
-      for (final id in ['nav-public-tab', 'nav-contacts-tab', 'nav-personal-tab']) {
+      for (final id in ['nav-public-tab', 'nav-personal-tab']) {
         expect(byId(id), findsOneWidget, reason: id);
       }
+      expect(byId('nav-contacts-tab'), findsNothing);
       expect(find.text('전체'), findsOneWidget);
-      expect(find.text('친구'), findsOneWidget);
+      expect(find.text('친구'), findsNothing);
       expect(find.text('내 거래'), findsOneWidget);
       expect(server.feedRequests, ['/transactions/public:1']);
     });
@@ -44,13 +45,9 @@ void main() {
     testWidgets('each tab loads its own list, once', (tester) async {
       final server = newServer()
         ..everyone.add(testTransaction('e1', description: 'Everyone item'))
-        ..friends.add(testTransaction('f1', description: 'Friends item'))
         ..mine.add(testTransaction('m1', description: 'Mine item'));
       await pumpApp(tester, server);
       expect(find.text('Everyone item'), findsOneWidget);
-
-      await tapId(tester, 'nav-contacts-tab');
-      expect(find.text('Friends item'), findsOneWidget);
 
       await tapId(tester, 'nav-personal-tab');
       expect(find.text('Mine item'), findsOneWidget);
@@ -60,7 +57,6 @@ void main() {
       expect(find.text('Everyone item'), findsOneWidget);
       expect(server.feedRequests, [
         '/transactions/public:1',
-        '/transactions/contacts:1',
         '/transactions:1',
       ]);
     });
@@ -70,31 +66,35 @@ void main() {
     testWidgets('shows names, action, amount and counts like the web', (tester) async {
       final server = newServer()
         ..everyone.addAll([
+          // The signed-in user is u1: p1 is a payment from me, r1 is a request to me,
+          // r2 is a request I made that was accepted.
           testTransaction('p1', sender: 'Alice Test', receiver: 'Bob Test',
-              description: 'Dinner', amount: 123456, likes: 2, comments: 3),
+              description: 'Dinner', amount: 123456, likes: 2, comments: 3,
+              senderId: 'u1', receiverId: 'u2'),
           testTransaction('r1', sender: 'Bob Test', receiver: 'Alice Test',
-              description: 'Please pay', amount: 700, requestStatus: 'pending', status: 'pending'),
+              description: 'Please pay', amount: 700, requestStatus: 'pending', status: 'pending',
+              senderId: 'u2', receiverId: 'u1'),
           testTransaction('r2', sender: 'Cara Test', receiver: 'Alice Test',
-              description: 'Charged one', amount: 250, requestStatus: 'accepted'),
+              description: 'Charged one', amount: 250, requestStatus: 'accepted',
+              senderId: 'u1', receiverId: 'u3'),
         ]);
       await pumpApp(tester, server);
 
-      // A payment: "-" and the "결제" word, amount with a thousands separator.
+      // A payment I made: "-" and the "결제" word, amount with a thousands separator.
       expect(find.text('Dinner'), findsOneWidget);
       expect(find.descendant(of: byId('transaction-amount-p1'), matching: find.text('-\$1,234.56')), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-action-p1'), matching: find.text('결제')), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-sender-p1'), matching: find.text('Alice Test')), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-receiver-p1'), matching: find.text('Bob Test')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-title-p1'), matching: find.text('Alice Test님이 Bob Test님에게 이체했습니다')), findsOneWidget);
       final p1 = byId('transaction-item-p1');
       expect(find.descendant(of: p1, matching: find.text('2')), findsOneWidget); // likes
       expect(find.descendant(of: p1, matching: find.text('3')), findsOneWidget); // comments
 
-      // A pending request: "+" and "요청".
-      expect(find.descendant(of: byId('transaction-amount-r1'), matching: find.text('+\$7.00')), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-action-r1'), matching: find.text('요청')), findsOneWidget);
+      // A pending request to me: the sign it will have (I will pay: "-"), and "요청".
+      expect(find.descendant(of: byId('transaction-amount-r1'), matching: find.text('-\$7.00')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-title-r1'), matching: find.textContaining('님에게 요청했습니다')), findsOneWidget);
 
-      // An accepted request: "청구" (the web says "charged").
-      expect(find.descendant(of: byId('transaction-action-r2'), matching: find.text('청구')), findsOneWidget);
+      // An accepted request I made: "청구" (the web says "charged"), I was paid: "+".
+      expect(find.descendant(of: byId('transaction-title-r2'), matching: find.textContaining('님에게 청구했습니다')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-amount-r2'), matching: find.text('+\$2.50')), findsOneWidget);
     });
 
     testWidgets('an empty list says so', (tester) async {
@@ -229,7 +229,8 @@ void main() {
     testWidgets('opens from the list, shows the transaction, and goes back', (tester) async {
       final server = newServer()
         ..everyone.add(testTransaction('t1',
-            description: 'Dinner', amount: 2500, likes: 1, comments: 2));
+            description: 'Dinner', amount: 2500, likes: 1, comments: 2,
+            senderId: 'u1', receiverId: 'u2'));
       await pumpApp(tester, server);
 
       await tapId(tester, 'transaction-item-t1');

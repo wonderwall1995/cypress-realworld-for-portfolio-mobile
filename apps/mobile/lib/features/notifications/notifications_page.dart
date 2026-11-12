@@ -43,7 +43,8 @@ class NotificationsPage extends ConsumerWidget {
                 const Text('알림을 불러오지 못했습니다.'),
                 const SizedBox(height: 12),
                 OutlinedButton(
-                  onPressed: () => ref.read(notificationsProvider.notifier).retry(),
+                  onPressed: () =>
+                      ref.read(notificationsProvider.notifier).retry(),
                   child: const Text('다시 시도'),
                 ),
               ],
@@ -59,7 +60,10 @@ class NotificationsPage extends ConsumerWidget {
                     child: SizedBox(
                       height: constraints.maxHeight,
                       child: const Center(
-                        child: TestId('notifications-empty', child: Text('새 알림이 없습니다.')),
+                        child: TestId(
+                          'notifications-empty',
+                          child: Text('새 알림이 없습니다.'),
+                        ),
                       ),
                     ),
                   ),
@@ -70,7 +74,8 @@ class NotificationsPage extends ConsumerWidget {
                     physics: const AlwaysScrollableScrollPhysics(),
                     itemCount: list.length,
                     separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (context, i) => _NotificationTile(notification: list[i]),
+                    itemBuilder: (context, i) =>
+                        _NotificationTile(notification: list[i]),
                   ),
                 ),
         ),
@@ -80,11 +85,11 @@ class NotificationsPage extends ConsumerWidget {
 }
 
 IconData _iconFor(NotificationKind kind) => switch (kind) {
-      NotificationKind.requested => Icons.request_page_outlined,
-      NotificationKind.received => Icons.payments_outlined,
-      NotificationKind.like => Icons.favorite_border,
-      NotificationKind.comment => Icons.chat_bubble_outline,
-    };
+  NotificationKind.requested => Icons.request_page_outlined,
+  NotificationKind.received => Icons.payments_outlined,
+  NotificationKind.like => Icons.favorite_border,
+  NotificationKind.comment => Icons.chat_bubble_outline,
+};
 
 class _NotificationTile extends ConsumerWidget {
   const _NotificationTile({required this.notification});

@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
+import '../../core/error_text.dart';
+import '../auth/auth_widgets.dart';
 import '../../core/test_id.dart';
 import 'bank_account.dart';
 import 'bank_accounts_controller.dart';
@@ -16,6 +18,7 @@ class BankAccountsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final accounts = ref.watch(bankAccountsProvider);
+    final deleteError = ref.watch(bankAccountDeleteErrorProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -39,16 +42,28 @@ class BankAccountsPage extends ConsumerWidget {
         error: (error, _) => _LoadError(
           onRetry: () => ref.read(bankAccountsProvider.notifier).reload(),
         ),
-        data: (list) => list.isEmpty
-            ? const Center(child: Text('등록된 은행 계좌가 없습니다.'))
-            : TestId(
-                'bankaccount-list',
-                child: ListView.separated(
-                  itemCount: list.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, i) => _BankAccountTile(account: list[i]),
-                ),
+        data: (list) => Column(
+          children: [
+            // The reason the server gave, above the list. The account stays in it.
+            if (deleteError != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: FormErrorBanner(id: 'bankaccount-delete-error', message: deleteError),
               ),
+            Expanded(
+              child: list.isEmpty
+                  ? const Center(child: Text('등록된 은행 계좌가 없습니다.'))
+                  : TestId(
+                      'bankaccount-list',
+                      child: ListView.separated(
+                        itemCount: list.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, i) => _BankAccountTile(account: list[i]),
+                      ),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -83,7 +98,6 @@ class _BankAccountTile extends ConsumerWidget {
   final BankAccount account;
 
   Future<void> _confirmAndDelete(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -109,32 +123,38 @@ class _BankAccountTile extends ConsumerWidget {
     );
     if (confirmed != true) return;
 
+    final errors = ref.read(bankAccountDeleteErrorProvider.notifier);
+    errors.set(null);
     try {
       await ref.read(bankAccountsProvider.notifier).remove(account.id);
     } on ApiException catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: TestId(
-            'alert-bar-error',
-            child: Text(e.isConnection ? '서버에 연결할 수 없습니다.' : '은행 계좌를 삭제하지 못했습니다.'),
-          ),
-        ),
-      );
+      errors.set(serverRefusalText(e, base: '은행 계좌를 삭제하지 못했습니다'));
     }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final hasMoney = (account.balance ?? 0) != 0;
     return TestId(
       'bankaccount-list-item-${account.id}',
       child: ListTile(
         leading: const Icon(Icons.account_balance_outlined),
         title: Text(account.bankName),
-        subtitle: Text(account.describe),
+        subtitle: hasMoney
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(account.describe),
+                  const TestId('bankaccount-delete-locked', child: Text('잔액이 있는 계좌는 삭제할 수 없습니다.')),
+                ],
+              )
+            : Text(account.describe),
+        isThreeLine: hasMoney,
         trailing: TestId(
           'bankaccount-delete',
           child: TextButton(
-            onPressed: () => _confirmAndDelete(context, ref),
+            // The server refuses to delete an account that holds money (400).
+            onPressed: hasMoney ? null : () => _confirmAndDelete(context, ref),
             child: const Text('삭제'),
           ),
         ),

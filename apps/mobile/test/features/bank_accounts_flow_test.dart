@@ -367,8 +367,11 @@ void main() {
       await tester.pumpAndSettle();
       await tapId(tester, 'bankaccount-delete-confirm');
 
+      // The account stays, and the reason is above the list (not a snack bar).
       expect(byId('bankaccount-list-item-b1'), findsOneWidget);
-      expect(byId('alert-bar-error'), findsOneWidget);
+      expect(find.descendant(of: byId('bankaccount-delete-error'), matching: find.text('은행 계좌를 삭제하지 못했습니다 (boom)')), findsOneWidget);
+      expect(tester.getRect(byId('bankaccount-delete-error')).bottom, lessThanOrEqualTo(tester.getRect(byId('bankaccount-list')).top));
+      expect(byId('alert-bar-error'), findsNothing);
     });
 
     testWidgets('create adds an account and returns to the list', (tester) async {

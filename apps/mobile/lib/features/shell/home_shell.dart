@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/session.dart';
 import '../../core/test_id.dart';
+import '../bank_accounts/bank_accounts_controller.dart';
+import '../notifications/notification_live_sync.dart';
 import '../notifications/notifications_controller.dart';
 
 /// The red number on the 알림 icon: how many notifications are unread.
@@ -42,7 +44,11 @@ class _UnreadBadgeOverlay extends ConsumerWidget {
                 ),
                 child: Text(
                   count > 99 ? '99+' : '$count',
-                  style: TextStyle(color: colors.onError, fontSize: 11, height: 1.2),
+                  style: TextStyle(
+                    color: colors.onError,
+                    fontSize: 11,
+                    height: 1.2,
+                  ),
                 ),
               ),
             ),
@@ -63,60 +69,92 @@ class HomeShell extends ConsumerWidget {
 
   static const _tabs = [
     (id: 'sidenav-home', label: '홈', icon: Icons.home_outlined),
-    (id: 'sidenav-notifications', label: '알림', icon: Icons.notifications_outlined),
-    (id: 'sidenav-bankaccounts', label: '은행 계좌', icon: Icons.account_balance_outlined),
-    (id: 'sidenav-my-account', label: '내 계좌', icon: Icons.account_balance_wallet_outlined),
+    (
+      id: 'sidenav-notifications',
+      label: '알림',
+      icon: Icons.notifications_outlined,
+    ),
+    (
+      id: 'sidenav-bankaccounts',
+      label: '은행 계좌',
+      icon: Icons.account_balance_outlined,
+    ),
+    (
+      id: 'sidenav-my-account',
+      label: '내 계좌',
+      icon: Icons.account_balance_wallet_outlined,
+    ),
   ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      body: navigationShell,
-      bottomNavigationBar: Stack(
-        children: [
-          NavigationBar(
-            selectedIndex: navigationShell.currentIndex,
-            onDestinationSelected: (index) {
-              if (index == _tabs.length) {
-                _openMoreMenu(context, ref);
-                return;
-              }
-              // The balance may have changed (a request was accepted, for example).
-              if (_tabs[index].id == 'sidenav-my-account') {
-                ref.read(sessionProvider.notifier).refreshUser();
-              }
-              // New notifications may have come in. (There is no automatic refresh.)
-              if (_tabs[index].id == 'sidenav-notifications') {
-                ref.read(notificationsProvider.notifier).refresh();
-              }
-              navigationShell.goBranch(
-                index,
-                initialLocation: index == navigationShell.currentIndex,
-              );
-            },
-            destinations: [
-              for (final tab in _tabs)
-                TestId(
-                  tab.id,
-                  child: NavigationDestination(icon: Icon(tab.icon), label: tab.label),
+    return NotificationLiveSync(
+      child: Scaffold(
+        body: navigationShell,
+        bottomNavigationBar: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const MoneyChangeNotice(),
+            Stack(
+              children: [
+                NavigationBar(
+                  selectedIndex: navigationShell.currentIndex,
+                  onDestinationSelected: (index) {
+                    if (index == _tabs.length) {
+                      _openMoreMenu(context, ref);
+                      return;
+                    }
+                    // The balance may have changed (a request was accepted, for example).
+                    if (_tabs[index].id == 'sidenav-my-account') {
+                      ref.read(sessionProvider.notifier).refreshUser();
+                    }
+                    // The money in the accounts may have changed (a transfer, a deposit, an accepted request).
+                    if (_tabs[index].id == 'sidenav-bankaccounts') {
+                      ref.read(bankAccountsProvider.notifier).reload();
+                    }
+                    // New notifications may have come in. (There is no automatic refresh.)
+                    if (_tabs[index].id == 'sidenav-notifications') {
+                      ref.read(notificationsProvider.notifier).refresh();
+                    }
+                    navigationShell.goBranch(
+                      index,
+                      initialLocation: index == navigationShell.currentIndex,
+                    );
+                  },
+                  destinations: [
+                    for (final tab in _tabs)
+                      TestId(
+                        tab.id,
+                        child: NavigationDestination(
+                          icon: Icon(tab.icon),
+                          label: tab.label,
+                        ),
+                      ),
+                    const TestId(
+                      'sidenav-more',
+                      child: NavigationDestination(
+                        icon: Icon(Icons.more_horiz),
+                        label: '더보기',
+                      ),
+                    ),
+                  ],
                 ),
-              const TestId(
-                'sidenav-more',
-                child: NavigationDestination(icon: Icon(Icons.more_horiz), label: '더보기'),
-              ),
-            ],
-          ),
-          // The unread number, on top of the 알림 tab. Taps go to the tab below;
-          // the meaning (semantics) stays, so a test can find it by its id.
-          Positioned.fill(
-            child: IgnorePointer(
-              child: _UnreadBadgeOverlay(
-                tabIndex: _tabs.indexWhere((t) => t.id == 'sidenav-notifications'),
-                tabCount: _tabs.length + 1, // the tabs and the ... button
-              ),
+                // The unread number, on top of the 알림 tab. Taps go to the tab below;
+                // the meaning (semantics) stays, so a test can find it by its id.
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: _UnreadBadgeOverlay(
+                      tabIndex: _tabs.indexWhere(
+                        (t) => t.id == 'sidenav-notifications',
+                      ),
+                      tabCount: _tabs.length + 1, // the tabs and the ... button
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -137,7 +175,7 @@ class HomeShell extends ConsumerWidget {
           children: [
             ListTile(
               leading: const CircleAvatar(child: Icon(Icons.person_outline)),
-              title: TestId('sidenav-user-full-name', child: Text(fullName)),
+              title: TestId('sidenav-user-full-name', child: Text(fullName, maxLines: 1, overflow: TextOverflow.ellipsis)),
               subtitle: TestId(
                 'sidenav-username',
                 child: Text(username == null ? '' : '@$username'),

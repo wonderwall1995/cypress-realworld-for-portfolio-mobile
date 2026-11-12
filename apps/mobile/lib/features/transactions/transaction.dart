@@ -25,6 +25,24 @@ class TransactionComment {
 /// one transaction for each deposit; `senderName` is already "외부 입금".
 const externalDepositSenderId = 'external-deposit';
 
+/// The signed-in user's own bank account in a transaction: which bank, and how
+/// much the account held after the transaction. The server sends it only when
+/// the account is the user's own; for a request that is still waiting there is
+/// no balance yet.
+class MyAccountInfo {
+  const MyAccountInfo({required this.bankName, this.balanceAfter});
+
+  factory MyAccountInfo.fromJson(Map<String, dynamic> json) => MyAccountInfo(
+        bankName: json['bankName'] as String? ?? '',
+        balanceAfter: (json['balanceAfter'] as num?)?.toInt(),
+      );
+
+  final String bankName;
+
+  /// In cents. Null when the server does not say.
+  final int? balanceAfter;
+}
+
 /// A payment, a request, or an external deposit, as the server sends it.
 class Transaction {
   const Transaction({
@@ -39,6 +57,9 @@ class Transaction {
     required this.requestStatus,
     required this.likedByUserIds,
     required this.comments,
+    this.createdAt,
+    this.source,
+    this.myAccount,
   });
 
   factory Transaction.fromJson(Map<String, dynamic> json) {
@@ -64,6 +85,11 @@ class Transaction {
       comments: [
         for (final c in comments) TransactionComment.fromJson(c as Map<String, dynamic>),
       ],
+      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+      source: (json['source'] as String?)?.isEmpty ?? true ? null : json['source'] as String?,
+      myAccount: json['myAccount'] is Map<String, dynamic>
+          ? MyAccountInfo.fromJson(json['myAccount'] as Map<String, dynamic>)
+          : null,
     );
   }
 
@@ -89,6 +115,24 @@ class Transaction {
   /// Oldest first, as the server sends them.
   final List<TransactionComment> comments;
 
+  /// The id of the bank account an external deposit went into. Null for the rest.
+  final String? source;
+
+  /// The user's own bank account in this transaction (null when it is not theirs).
+  final MyAccountInfo? myAccount;
+
+  /// When the payment, request or deposit was made. Missing if the server does not say.
+  final DateTime? createdAt;
+
+  /// The day it was made on the phone's calendar, for example `2026/11/10`.
+  /// Null when the server did not send the time.
+  String? get dateLabel {
+    final t = createdAt?.toLocal();
+    if (t == null) return null;
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${t.year}/${two(t.month)}/${two(t.day)}';
+  }
+
   int get likeCount => likedByUserIds.length;
   int get commentCount => comments.length;
 
@@ -97,6 +141,24 @@ class Transaction {
   /// A deposit the user made into one of their own bank accounts. Money came in
   /// from outside, so there is no real sender.
   bool get isExternalDeposit => senderId == externalDepositSenderId;
+
+  /// Did money really move? A payment that is complete, or a request that was
+  /// accepted. A request that is waiting, or was rejected, moved nothing.
+  bool get moneyMoved => isExternalDeposit || (isPayment ? status == 'complete' : isAcceptedRequest);
+
+  /// Which way the money went for [userId]: `true` = the user received it (입금),
+  /// `false` = the user paid it (출금), null = not the user's money.
+  /// A payment goes from the sender to the receiver; an accepted request goes
+  /// from the receiver (who pays) to the sender (who asked).
+  bool? receivedBy(String? userId) {
+    if (userId == null || senderId == receiverId) return null;
+    final payer = isRequest ? receiverId : senderId;
+    final payee = isRequest ? senderId : receiverId;
+    if (isExternalDeposit) return receiverId == userId ? true : null;
+    if (payee == userId) return true;
+    if (payer == userId) return false;
+    return null;
+  }
 
   bool get isRequest => requestStatus != null;
   bool get isPayment => !isRequest;

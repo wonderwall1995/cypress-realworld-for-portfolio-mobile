@@ -1,8 +1,9 @@
 enum NotificationKind { requested, received, like, comment }
 
 /// One unread notification. [userFullName] is what the server sends.
-/// (For "received" the server sends the name of the user who got the money,
-/// that is, the signed-in user. The web shows it the same way.)
+/// For "received" it is the name of the user who sent the money ("성 이름").
+/// Requests no longer exist, but an old "requested" notification can still be
+/// in the list, so it is still shown.
 class AppNotification {
   const AppNotification({
     required this.id,
@@ -16,12 +17,12 @@ class AppNotification {
     final kind = json['likeId'] != null
         ? NotificationKind.like
         : json['commentId'] != null
-            ? NotificationKind.comment
-            : switch (json['status']) {
-                'requested' => NotificationKind.requested,
-                'received' => NotificationKind.received,
-                _ => null,
-              };
+        ? NotificationKind.comment
+        : switch (json['status']) {
+            'requested' => NotificationKind.requested,
+            'received' => NotificationKind.received,
+            _ => null,
+          };
     if (kind == null) return null;
     return AppNotification(
       id: json['id'] as String,
@@ -38,9 +39,9 @@ class AppNotification {
 
   /// Korean text, same meaning as the web text.
   String get message => switch (kind) {
-        NotificationKind.requested => '$userFullName님이 결제를 요청했습니다.',
-        NotificationKind.received => '$userFullName님이 결제를 받았습니다.',
-        NotificationKind.like => '$userFullName님이 거래에 좋아요를 눌렀습니다.',
-        NotificationKind.comment => '$userFullName님이 거래에 댓글을 남겼습니다.',
-      };
+    NotificationKind.requested => '$userFullName님이 결제를 요청했습니다.',
+    NotificationKind.received => '$userFullName님이 이체했습니다.',
+    NotificationKind.like => '$userFullName님이 거래에 좋아요를 눌렀습니다.',
+    NotificationKind.comment => '$userFullName님이 거래에 댓글을 남겼습니다.',
+  };
 }

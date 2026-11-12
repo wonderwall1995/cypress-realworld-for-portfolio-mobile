@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/api_client.dart';
+import '../../core/error_text.dart';
 import '../../core/test_id.dart';
 import '../auth/auth_widgets.dart';
 
-String bankAccountErrorMessage(ApiException e) {
-  if (e.isConnection) return '서버에 연결할 수 없습니다.';
-  return '은행 계좌를 저장하지 못했습니다. 입력한 내용을 확인해 주세요.';
-}
+String bankAccountErrorMessage(ApiException e) =>
+    serverRefusalText(e, base: '은행 계좌를 저장하지 못했습니다');
 
 /// Shown above the form: the user must not type a real bank account.
 const bankAccountDemoNotice = '진짜 자신의 계좌를 만들진 말아주세요! 이건 데모 앱입니다.';

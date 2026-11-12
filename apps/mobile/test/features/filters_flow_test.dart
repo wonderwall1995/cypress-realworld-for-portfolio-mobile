@@ -12,7 +12,6 @@ FakeServer newServer() => FakeServer(signedIn: true, accounts: [testAccount('b1'
     testTransaction('a', description: 'All A'),
     testTransaction('b', description: 'All B'),
   ])
-  ..friends.add(testTransaction('f', description: 'Friend item'))
   ..filtered.add(testTransaction('a', description: 'Only A'));
 
 ProviderContainer containerOf(WidgetTester tester) =>
@@ -563,9 +562,9 @@ void main() {
       await fillSheet(tester, 'deposit', min: '1', max: '2');
       await applySheet(tester, 'deposit');
 
-      await tapId(tester, 'nav-contacts-tab');
+      await tapId(tester, 'nav-personal-tab');
 
-      expect(server.feedRequests.last, '/transactions/contacts:1');
+      expect(server.feedRequests.last, '/transactions:1');
       expect(lastQuery(server)['dateRangeStart'], DateTime(2026, 3, 5).toUtc().toIso8601String());
       expect(lastQuery(server)['depositMax'], '200');
       // The boxes and chips are the same on this tab.

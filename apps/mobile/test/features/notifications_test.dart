@@ -64,7 +64,7 @@ void main() {
 
       expect(byId('notifications-list'), findsOneWidget);
       expect(find.text('Bob Test님이 결제를 요청했습니다.'), findsOneWidget);
-      expect(find.text('Ada Kim님이 결제를 받았습니다.'), findsOneWidget);
+      expect(find.text('Ada Kim님이 이체했습니다.'), findsOneWidget);
       expect(find.text('Cara Test님이 거래에 좋아요를 눌렀습니다.'), findsOneWidget);
       expect(find.text('Dan Test님이 거래에 댓글을 남겼습니다.'), findsOneWidget);
       for (final id in ['n1', 'n2', 'n3', 'n4']) {
