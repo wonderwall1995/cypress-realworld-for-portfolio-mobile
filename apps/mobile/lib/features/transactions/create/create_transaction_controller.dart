@@ -29,13 +29,11 @@ enum CreateStep { selectContact, payment, complete }
 /// What was created, for the last step.
 class CreatedTransaction {
   const CreatedTransaction({
-    required this.isPayment,
     required this.dollars,
     required this.description,
     required this.receiver,
   });
 
-  final bool isPayment;
   final int dollars;
   final String description;
   final UserSummary receiver;
@@ -49,7 +47,7 @@ class CreateState {
   final CreatedTransaction? created;
 }
 
-/// The three steps of "새 거래": choose a user, enter the amount, done.
+/// The three steps of "이체": choose a user, enter the amount, done.
 /// Starts again each time the screen is opened.
 class CreateTransactionController extends Notifier<CreateState> {
   @override
@@ -69,23 +67,19 @@ class CreateTransactionController extends Notifier<CreateState> {
     state = const CreateState();
   }
 
-  /// Throws [ApiException] when the server refuses. [type] is `payment` or `request`.
-  /// A payment needs [otherAccountId] and the user's [password]; a request needs
-  /// only [myAccountId] (the account that will receive the money).
+  /// Throws [ApiException] when the server refuses.
   Future<void> submit({
-    required String type,
     required int dollars,
     required String description,
     required String myAccountId,
-    String? otherAccountId,
-    String? password,
+    required String otherAccountId,
+    required String password,
   }) async {
     final receiver = state.receiver;
     if (receiver == null) return;
 
     final session = ref.read(apiClientProvider).sessionNumber;
     await ref.read(apiClientProvider).createTransaction(
-          transactionType: type,
           receiverId: receiver.id,
           description: description,
           amount: dollars,
@@ -103,7 +97,6 @@ class CreateTransactionController extends Notifier<CreateState> {
       step: CreateStep.complete,
       receiver: receiver,
       created: CreatedTransaction(
-        isPayment: type == 'payment',
         dollars: dollars,
         description: description,
         receiver: receiver,

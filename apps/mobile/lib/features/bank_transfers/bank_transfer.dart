@@ -9,7 +9,6 @@ class BankTransfer {
     required this.amount,
     required this.status,
     required this.bankAccountId,
-    required this.transactionId,
     required this.balanceBefore,
     required this.balanceAfter,
     required this.createdAt,
@@ -17,15 +16,12 @@ class BankTransfer {
 
   factory BankTransfer.fromJson(Map<String, dynamic> json) {
     final source = json['source'] as String?;
-    final transactionId = json['transactionId'] as String?;
     return BankTransfer(
       id: json['id'] as String,
       type: json['type'] as String? ?? '',
       amount: (json['amount'] as num?)?.toInt() ?? 0,
       status: json['status'] as String? ?? '',
-      // The server makes some withdrawals by itself and leaves the account empty.
       bankAccountId: (source == null || source.isEmpty) ? null : source,
-      transactionId: (transactionId == null || transactionId.isEmpty) ? null : transactionId,
       balanceBefore: (json['balanceBefore'] as num?)?.toInt() ?? 0,
       balanceAfter: (json['balanceAfter'] as num?)?.toInt() ?? 0,
       createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
@@ -41,11 +37,8 @@ class BankTransfer {
   final int amount;
   final String status;
 
-  /// The bank account, or null for a withdrawal the server made by itself.
+  /// The bank account, or null when the server does not say.
   final String? bankAccountId;
-
-  /// Set when the server made this withdrawal to cover that payment.
-  final String? transactionId;
 
   /// In cents.
   final int balanceBefore;
@@ -54,13 +47,7 @@ class BankTransfer {
 
   bool get isDeposit => type == 'deposit';
 
-  /// A withdrawal that the server made to cover a payment.
-  bool get isAutomatic => transactionId != null;
-
-  String get label {
-    if (isDeposit) return '입금';
-    return isAutomatic ? '출금 (결제 부족분)' : '출금';
-  }
+  String get label => isDeposit ? '입금' : '출금';
 }
 
 /// Korean text for what the server says when it refuses a deposit or withdrawal.

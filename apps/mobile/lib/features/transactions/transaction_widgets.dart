@@ -177,18 +177,14 @@ class BankBalanceText extends StatelessWidget {
 }
 
 /// The headline of a transaction: "Alice Test님이 Bob Test님에게 이체했습니다".
-/// An external deposit is just "외부 입금". (An old request still in the list reads
-/// "요청했습니다" or "청구했습니다".)
+/// An external deposit is just "외부 입금".
 class TransactionTitleLine extends StatelessWidget {
   const TransactionTitleLine(this.transaction, {super.key});
 
   final Transaction transaction;
 
   /// The last words of the sentence.
-  static String action(Transaction t) {
-    final verb = t.isPayment ? '이체' : (t.isAcceptedRequest ? '청구' : '요청');
-    return '님에게 $verb했습니다';
-  }
+  static const action = '님에게 이체했습니다';
 
   @override
   Widget build(BuildContext context) {
@@ -207,7 +203,7 @@ class TransactionTitleLine extends StatelessWidget {
           name('sender', transaction.senderName),
           Text('님이 ', style: style),
           name('receiver', transaction.receiverName),
-          TestId('transaction-action-$id', child: Text(action(transaction), style: style)),
+          TestId('transaction-action-$id', child: Text(action, style: style)),
         ],
       ),
     );
@@ -217,8 +213,7 @@ class TransactionTitleLine extends StatelessWidget {
 /// The amount as the signed-in user sees it (the same rule as the web):
 ///  - money I received: green "+$30.00"
 ///  - money I paid: red "-$30.00"
-///  - a request that did not move money yet (waiting, or rejected): grey, with the
-///    sign it would have
+///  - a payment that did not move money: grey, with the sign it would have
 ///  - someone else's transaction: grey, no sign
 class TransactionAmountText extends ConsumerWidget {
   const TransactionAmountText(this.transaction, {this.large = false, super.key});

@@ -89,7 +89,6 @@ class NotificationsPage extends ConsumerWidget {
 }
 
 IconData _iconFor(NotificationKind kind) => switch (kind) {
-  NotificationKind.requested => Icons.request_page_outlined,
   NotificationKind.received => Icons.payments_outlined,
   NotificationKind.like => Icons.thumb_up_outlined,
   NotificationKind.comment => Icons.chat_bubble_outline,

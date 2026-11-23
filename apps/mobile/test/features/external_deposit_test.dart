@@ -29,10 +29,9 @@ void main() {
     test('only a sender called external-deposit makes an external deposit', () {
       expect(Transaction.fromJson(depositItem('d')).isExternalDeposit, isTrue);
       expect(Transaction.fromJson(testTransaction('p')).isExternalDeposit, isFalse);
-      expect(Transaction.fromJson(testTransaction('r', requestStatus: 'pending')).isExternalDeposit, isFalse);
     });
 
-    test('it says 입금, not 결제', () {
+    test('it says 입금, not 이체', () {
       final t = Transaction.fromJson(depositItem('d'));
       expect(t.statusLabel, '입금 완료');
       expect(Transaction.fromJson(testTransaction('p')).statusLabel, '이체 완료');

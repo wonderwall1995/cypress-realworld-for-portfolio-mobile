@@ -15,25 +15,9 @@ void main() {
   });
 
   group('Transaction.fromJson', () {
-    test('a payment has no request status', () {
-      final t = Transaction.fromJson(testTransaction('p1'));
-      expect(t.isPayment, isTrue);
-      expect(t.isRequest, isFalse);
-      expect(t.requestStatus, isNull);
-      expect(t.statusLabel, '이체 완료');
-    });
-
-    test('an empty request status also means a payment', () {
-      final json = testTransaction('p1')..['requestStatus'] = '';
-      expect(Transaction.fromJson(json).isPayment, isTrue);
-    });
-
-    test('request words follow the web rule', () {
-      Transaction request(String status) =>
-          Transaction.fromJson(testTransaction('r', requestStatus: status));
-      expect(request('pending').statusLabel, '요청 대기 중');
-      expect(request('accepted').statusLabel, '수락됨');
-      expect(request('rejected').statusLabel, '거절됨');
+    test('says where it stands', () {
+      expect(Transaction.fromJson(testTransaction('p1')).statusLabel, '이체 완료');
+      expect(Transaction.fromJson(testTransaction('p1', status: 'incomplete')).statusLabel, '처리 중');
     });
 
     test('counts likes and comments, and keeps cents', () {

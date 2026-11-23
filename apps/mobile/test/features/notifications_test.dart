@@ -16,7 +16,7 @@ void main() {
         ..notifications.addAll([
           testNotification('n1', 'like'),
           testNotification('n2', 'comment'),
-          testNotification('n3', 'requested'),
+          testNotification('n3', 'received'),
         ]);
       await pumpApp(tester, server);
 
@@ -54,7 +54,6 @@ void main() {
     testWidgets('shows each kind in Korean, with a 읽음 button', (tester) async {
       final server = newServer()
         ..notifications.addAll([
-          testNotification('n1', 'requested', name: 'Bob Test'),
           testNotification('n2', 'received', name: 'Ada Kim'),
           testNotification('n3', 'like', name: 'Cara Test'),
           testNotification('n4', 'comment', name: 'Dan Test'),
@@ -63,11 +62,10 @@ void main() {
       await tapId(tester, 'sidenav-notifications');
 
       expect(byId('notifications-list'), findsOneWidget);
-      expect(find.text('Bob Test님이 결제를 요청했습니다.'), findsOneWidget);
       expect(find.text('Ada Kim님이 이체했습니다.'), findsOneWidget);
       expect(find.text('Cara Test님이 거래에 좋아요를 눌렀습니다.'), findsOneWidget);
       expect(find.text('Dan Test님이 거래에 댓글을 남겼습니다.'), findsOneWidget);
-      for (final id in ['n1', 'n2', 'n3', 'n4']) {
+      for (final id in ['n2', 'n3', 'n4']) {
         expect(byId('notification-list-item-$id'), findsOneWidget, reason: id);
         expect(byId('notification-mark-read-$id'), findsOneWidget, reason: id);
       }

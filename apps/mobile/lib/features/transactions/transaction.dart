@@ -27,8 +27,7 @@ const externalDepositSenderId = 'external-deposit';
 
 /// The signed-in user's own bank account in a transaction: which bank, and how
 /// much the account held after the transaction. The server sends it only when
-/// the account is the user's own; for a request that is still waiting there is
-/// no balance yet.
+/// the account is the user's own.
 class MyAccountInfo {
   const MyAccountInfo({required this.bankName, this.balanceAfter});
 
@@ -43,7 +42,7 @@ class MyAccountInfo {
   final int? balanceAfter;
 }
 
-/// A payment, a request, or an external deposit, as the server sends it.
+/// A payment (이체) or an external deposit, as the server sends it.
 class Transaction {
   const Transaction({
     required this.id,
@@ -54,7 +53,6 @@ class Transaction {
     required this.description,
     required this.amount,
     required this.status,
-    required this.requestStatus,
     required this.likedByUserIds,
     required this.comments,
     this.createdAt,
@@ -63,7 +61,6 @@ class Transaction {
   });
 
   factory Transaction.fromJson(Map<String, dynamic> json) {
-    final requestStatus = json['requestStatus'] as String?;
     final likes = (json['likes'] as List<dynamic>?) ?? const [];
     final comments = (json['comments'] as List<dynamic>?) ?? const [];
     return Transaction(
@@ -75,10 +72,7 @@ class Transaction {
       description: json['description'] as String? ?? '',
       amount: (json['amount'] as num?)?.toInt() ?? 0,
       status: json['status'] as String? ?? '',
-      // A payment has no request status (missing or empty).
-      requestStatus: (requestStatus == null || requestStatus.isEmpty) ? null : requestStatus,
-      // One entry per like. The same user can appear twice: the server does
-      // not stop a second like.
+      // One entry per like. (Old data can hold the same user twice.)
       likedByUserIds: [
         for (final like in likes) (like as Map<String, dynamic>)['userId'] as String? ?? '',
       ],
@@ -106,9 +100,6 @@ class Transaction {
   /// `pending`, `incomplete`, or `complete`.
   final String status;
 
-  /// `pending`, `accepted`, or `rejected`. Null for a payment.
-  final String? requestStatus;
-
   /// The user id of each like.
   final List<String> likedByUserIds;
 
@@ -121,7 +112,7 @@ class Transaction {
   /// The user's own bank account in this transaction (null when it is not theirs).
   final MyAccountInfo? myAccount;
 
-  /// When the payment, request or deposit was made. Missing if the server does not say.
+  /// When the payment or deposit was made. Missing if the server does not say.
   final DateTime? createdAt;
 
   /// The day it was made on the phone's calendar, for example `2026/11/10`.
@@ -142,37 +133,23 @@ class Transaction {
   /// from outside, so there is no real sender.
   bool get isExternalDeposit => senderId == externalDepositSenderId;
 
-  /// Did money really move? A payment that is complete, or a request that was
-  /// accepted. A request that is waiting, or was rejected, moved nothing.
-  bool get moneyMoved => isExternalDeposit || (isPayment ? status == 'complete' : isAcceptedRequest);
+  /// Did money really move? A payment that is not complete moved nothing.
+  bool get moneyMoved => isExternalDeposit || status == 'complete';
 
   /// Which way the money went for [userId]: `true` = the user received it (입금),
   /// `false` = the user paid it (출금), null = not the user's money.
-  /// A payment goes from the sender to the receiver; an accepted request goes
-  /// from the receiver (who pays) to the sender (who asked).
+  /// The money goes from the sender to the receiver.
   bool? receivedBy(String? userId) {
     if (userId == null || senderId == receiverId) return null;
-    final payer = isRequest ? receiverId : senderId;
-    final payee = isRequest ? senderId : receiverId;
-    if (isExternalDeposit) return receiverId == userId ? true : null;
-    if (payee == userId) return true;
-    if (payer == userId) return false;
+    if (receiverId == userId) return true;
+    if (senderId == userId) return false;
     return null;
   }
 
-  bool get isRequest => requestStatus != null;
-  bool get isPayment => !isRequest;
-  bool get isAcceptedRequest => requestStatus == 'accepted';
-  bool get isRejectedRequest => requestStatus == 'rejected';
-  bool get isPendingRequest => requestStatus == 'pending';
-
   /// Where the transaction stands, for the detail screen.
   String get statusLabel {
-    if (isExternalDeposit) return status == 'complete' ? '입금 완료' : '처리 중';
-    if (isPayment) return status == 'complete' ? '이체 완료' : '처리 중';
-    if (isAcceptedRequest) return '수락됨';
-    if (isRejectedRequest) return '거절됨';
-    return '요청 대기 중';
+    if (status != 'complete') return '처리 중';
+    return isExternalDeposit ? '입금 완료' : '이체 완료';
   }
 }
 

@@ -193,7 +193,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      Text('새 거래의 기본 공개 범위', style: theme.textTheme.titleSmall),
+                      Text('새 이체의 기본 공개 범위', style: theme.textTheme.titleSmall),
                       const SizedBox(height: 8),
                       TestId(
                         'user-settings-privacy',

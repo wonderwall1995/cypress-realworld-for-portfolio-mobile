@@ -37,7 +37,6 @@ Map<String, dynamic> testTransaction(
   String receiver = 'Bob Test',
   String description = 'Test payment',
   int amount = 500,
-  String? requestStatus,
   String status = 'complete',
   int likes = 0,
   int comments = 0,
@@ -57,8 +56,6 @@ Map<String, dynamic> testTransaction(
       'description': description,
       'amount': amount,
       'status': status,
-      // A payment has no requestStatus at all, as on the real server.
-      if (requestStatus != null) 'requestStatus': requestStatus,
       'likes': likedBy != null
           ? [for (var i = 0; i < likedBy.length; i++) {'id': 'l$i', 'userId': likedBy[i]}]
           : List<Map<String, dynamic>>.generate(likes, (i) => {'id': 'l$i', 'userId': 'other$i'}),
@@ -76,8 +73,8 @@ Map<String, dynamic> testTransaction(
               comments, (i) => {'id': 'c$i', 'content': 'Comment $i', 'userId': 'u2'}),
     };
 
-/// A notification as the server sends it. [kind] is `requested`, `received`,
-/// `like` or `comment`.
+/// A notification as the server sends it. [kind] is `received`, `like` or
+/// `comment`.
 Map<String, dynamic> testNotification(
   String id,
   String kind, {
@@ -92,7 +89,7 @@ Map<String, dynamic> testNotification(
       'userFullName': name,
       if (kind == 'like') 'likeId': 'like-$id',
       if (kind == 'comment') 'commentId': 'comment-$id',
-      if (kind == 'requested' || kind == 'received') 'status': kind,
+      if (kind == 'received') 'status': kind,
     };
 
 /// Another user, as the server sends it in the user list.
@@ -103,8 +100,8 @@ Map<String, dynamic> testOtherUser(String id, String first, String last, {String
       'username': username ?? first.toLowerCase(),
     };
 
-/// A bank transfer as the server sends it. Amounts are in cents. An empty
-/// [source] and a [transactionId] mean the server made it to cover a payment.
+/// A bank transfer as the server sends it. Amounts are in cents. The real
+/// server sets [transactionId] for a deposit (its line in the home list).
 Map<String, dynamic> testTransfer(
   String id,
   String type,
@@ -251,9 +248,6 @@ class FakeServer {
   /// The `error` text of that refusal.
   String createTransactionMessage = 'refused';
 
-  /// Status code for `PATCH /transactions/:id` (null = the real rules: 409 if resolved).
-  int? updateTransactionStatus;
-
   /// Page numbers (1, 2, ...) for which a list request fails.
   final Set<int> failPages = {};
   bool failTransactionDetail = false;
@@ -391,9 +385,16 @@ class FakeServer {
         }
         final body = o.data as Map<String, dynamic>;
         final receiver = users.firstWhere((u) => u['id'] == body['receiverId']);
-        final isRequest = body['transactionType'] == 'request';
-        // The real rules: my account is always needed; a payment also needs the
-        // other account and the password, and the account must hold enough.
+        // The real server knows only `payment`.
+        if (body['transactionType'] != 'payment') {
+          return jsonBody(422, {
+            'errors': [
+              {'msg': 'Invalid value', 'param': 'transactionType', 'location': 'body'},
+            ],
+          });
+        }
+        // The real rules: both accounts and the password are needed, and my account
+        // must hold enough.
         final myId = body['myAccountId'];
         if (myId is! String) {
           return jsonBody(422, {
@@ -406,37 +407,33 @@ class FakeServer {
         if (mineFound.isEmpty) return jsonBody(404, {'error': 'bank account not found'});
         final myAccount = mineFound.first;
         final cents = (body['amount'] as int) * 100;
-        if (!isRequest) {
-          if (body['password'] != password) return jsonBody(403, {'error': 'the password is not correct'});
-          if (body['otherAccountId'] is! String) {
-            return jsonBody(422, {
-              'errors': [
-                {'msg': 'Invalid value', 'param': 'otherAccountId', 'location': 'body'},
-              ],
-            });
-          }
-          if ((myAccount['balance'] as int? ?? 0) < cents) {
-            return jsonBody(400, {'error': 'not enough balance in this bank account'});
-          }
-          myAccount['balance'] = (myAccount['balance'] as int? ?? 0) - cents;
+        if (body['password'] != password) return jsonBody(403, {'error': 'the password is not correct'});
+        if (body['otherAccountId'] is! String) {
+          return jsonBody(422, {
+            'errors': [
+              {'msg': 'Invalid value', 'param': 'otherAccountId', 'location': 'body'},
+            ],
+          });
         }
+        if ((myAccount['balance'] as int? ?? 0) < cents) {
+          return jsonBody(400, {'error': 'not enough balance in this bank account'});
+        }
+        myAccount['balance'] = (myAccount['balance'] as int? ?? 0) - cents;
         final created = testTransaction(
           'new${_nextId++}',
           sender: 'Ada Kim',
           receiver: '${receiver['firstName']} ${receiver['lastName']}',
           description: body['description'] as String,
           amount: (body['amount'] as int) * 100,
-          requestStatus: isRequest ? 'pending' : null,
-          status: isRequest ? 'pending' : 'complete',
           senderId: 'u1',
           receiverId: receiver['id'] as String,
         );
         created['myAccount'] = {
           'bankName': myAccount['bankName'],
-          if (!isRequest) 'balanceAfter': myAccount['balance'],
+          'balanceAfter': myAccount['balance'],
         };
         mine.insert(0, created);
-        if (!isRequest) balance -= created['amount'] as int;
+        balance -= created['amount'] as int;
         return jsonBody(200, {'transaction': created});
       case 'POST /users/verifyPassword':
         return (o.data as Map<String, dynamic>)['password'] == password
@@ -653,38 +650,6 @@ class FakeServer {
         'createdAt': DateTime.now().toUtc().toIso8601String(),
       });
       return ResponseBody.fromString('OK', 200);
-    }
-    if (o.method == 'PATCH' && o.path.startsWith('/transactions/')) {
-      if (updateTransactionStatus != null) {
-        return jsonBody(updateTransactionStatus!, {'error': 'refused'});
-      }
-      final id = o.path.substring('/transactions/'.length);
-      final all = [...everyone, ...mine];
-      final found = all.where((t) => t['id'] == id);
-      if (found.isEmpty) return jsonBody(404, {'error': 'not found'});
-      final t = found.first;
-      // The real rule: a request can be resolved once.
-      if (t['requestStatus'] != 'pending') {
-        return jsonBody(409, {'error': 'this request is already ${t['requestStatus']}'});
-      }
-      final patch = o.data as Map<String, dynamic>;
-      final status = patch['requestStatus'] as String;
-      if (status == 'accepted') {
-        // The real rules: the paying account and the password are needed, and the
-        // account must hold enough.
-        if (patch['password'] != password) return jsonBody(403, {'error': 'the password is not correct'});
-        final payer = accounts.where((a) => a['id'] == patch['payerAccountId'] && a['isDeleted'] != true);
-        if (payer.isEmpty) return jsonBody(404, {'error': 'bank account not found'});
-        final cents = t['amount'] as int;
-        if ((payer.first['balance'] as int? ?? 0) < cents) {
-          return jsonBody(400, {'error': 'not enough balance in this bank account'});
-        }
-        payer.first['balance'] = (payer.first['balance'] as int? ?? 0) - cents;
-        t['status'] = 'complete';
-        balance -= cents; // the receiver (the signed-in user) pays
-      }
-      t['requestStatus'] = status;
-      return ResponseBody.fromString('', 204);
     }
     if (o.method == 'DELETE' && o.path.startsWith('/bankAccounts/')) {
       if (failAccountDelete) return jsonBody(500, {'error': 'boom'});

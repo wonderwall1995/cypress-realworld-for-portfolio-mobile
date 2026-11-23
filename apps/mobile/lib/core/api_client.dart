@@ -355,31 +355,29 @@ class ApiClient {
   }
 
   /// Creates a payment (이체). [amount] is in whole dollars (the server
-  /// multiplies by 100). [transactionType] is `payment` (requests are gone).
-  /// It needs [myAccountId] (the account the money leaves), [otherAccountId]
+  /// multiplies by 100). It needs [myAccountId] (the account the money leaves), [otherAccountId]
   /// and the user's [password]. The server answers 403 for a wrong password and
   /// 400 when the account does not hold enough.
   Future<Map<String, dynamic>> createTransaction({
-    required String transactionType,
     required String receiverId,
     required String description,
     required int amount,
     required String myAccountId,
-    String? otherAccountId,
-    String? password,
+    required String otherAccountId,
+    required String password,
     String? privacyLevel,
   }) async {
     try {
       final response = await dio.post<Map<String, dynamic>>(
         '/transactions',
         data: {
-          'transactionType': transactionType,
+          'transactionType': 'payment',
           'receiverId': receiverId,
           'description': description,
           'amount': amount,
           'myAccountId': myAccountId,
-          if (otherAccountId != null) 'otherAccountId': otherAccountId,
-          if (password != null) 'password': password,
+          'otherAccountId': otherAccountId,
+          'password': password,
           if (privacyLevel != null) 'privacyLevel': privacyLevel,
         },
       );
@@ -540,8 +538,7 @@ class ApiClient {
     }
   }
 
-  /// The signed-in user's bank transfers (deposits and withdrawals), including
-  /// the withdrawals the server makes by itself to cover a payment.
+  /// The signed-in user's bank transfers (deposits and withdrawals).
   Future<List<Map<String, dynamic>>> getBankTransfers() async {
     try {
       final response = await dio.get<Map<String, dynamic>>('/bankTransfers');

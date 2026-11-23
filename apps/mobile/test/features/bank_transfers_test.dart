@@ -52,8 +52,8 @@ void main() {
         ..transfers.addAll([
           testTransfer('old', 'deposit', 5000,
               balanceBefore: 0, balanceAfter: 5000, createdAt: '2026-11-08T10:00:00.000Z'),
-          testTransfer('auto', 'withdrawal', 48500,
-              source: '', transactionId: 'tx1', balanceBefore: 1500, balanceAfter: 0,
+          testTransfer('none', 'withdrawal', 48500,
+              source: '', balanceBefore: 1500, balanceAfter: 0,
               createdAt: '2026-11-09T18:21:22.378Z'),
           testTransfer('gone', 'withdrawal', 100,
               source: 'deleted-account', balanceBefore: 5000, balanceAfter: 4900,
@@ -62,18 +62,18 @@ void main() {
       await pumpApp(tester, server);
       await openMyAccount(tester);
 
-      // Newest first: auto (11/9), then gone (11/8 12:00), then old (11/8 10:00).
-      final autoY = tester.getTopLeft(byId('bank-transfer-list-item-auto')).dy;
+      // Newest first: none (11/9), then gone (11/8 12:00), then old (11/8 10:00).
+      final noneY = tester.getTopLeft(byId('bank-transfer-list-item-none')).dy;
       final goneY = tester.getTopLeft(byId('bank-transfer-list-item-gone')).dy;
       final oldY = tester.getTopLeft(byId('bank-transfer-list-item-old')).dy;
-      expect(autoY, lessThan(goneY));
+      expect(noneY, lessThan(goneY));
       expect(goneY, lessThan(oldY));
 
       expect(find.text('입금 · First Test Bank'), findsOneWidget);
-      expect(find.text('출금 (결제 부족분) · 은행 계좌 없음'), findsOneWidget);
+      expect(find.text('출금 · 은행 계좌 없음'), findsOneWidget);
       expect(find.text('출금 · 삭제된 은행 계좌'), findsOneWidget);
       expect(find.descendant(of: byId('bank-transfer-amount-old'), matching: find.text('+\$50')), findsOneWidget);
-      expect(find.descendant(of: byId('bank-transfer-amount-auto'), matching: find.text('-\$485')), findsOneWidget);
+      expect(find.descendant(of: byId('bank-transfer-amount-none'), matching: find.text('-\$485')), findsOneWidget);
       expect(find.textContaining('잔액 \$15 → \$0'), findsOneWidget);
     });
 
@@ -369,13 +369,12 @@ void main() {
   });
 
   group('BankTransfer', () {
-    test('an empty account and transaction mean a withdrawal the server made', () {
-      final t = BankTransfer.fromJson(
-        testTransfer('a', 'withdrawal', 100, source: '', transactionId: 'tx'),
-      );
-      expect(t.bankAccountId, isNull);
-      expect(t.isAutomatic, isTrue);
-      expect(t.label, '출금 (결제 부족분)');
+    test('an empty account is no account', () {
+      expect(BankTransfer.fromJson(testTransfer('a', 'withdrawal', 100, source: '')).bankAccountId, isNull);
+    });
+
+    test('a deposit that has a transaction is still only a deposit', () {
+      expect(BankTransfer.fromJson(testTransfer('a', 'deposit', 100, transactionId: 'tx')).label, '입금');
     });
 
     test('labels', () {

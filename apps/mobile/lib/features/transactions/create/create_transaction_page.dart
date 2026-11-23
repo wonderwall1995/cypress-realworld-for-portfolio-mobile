@@ -20,7 +20,7 @@ import 'create_transaction_controller.dart';
 import 'password_confirm_dialog.dart';
 import 'user_summary.dart';
 
-/// "새 거래": choose a user, enter the amount and note, then done.
+/// "이체": choose a user, enter the amount and note, then done.
 class CreateTransactionPage extends ConsumerWidget {
   const CreateTransactionPage({super.key});
 
@@ -321,11 +321,10 @@ class _PaymentStepState extends ConsumerState<_PaymentStep> {
       send: (password) async {
         try {
           await controller.submit(
-            type: 'payment',
             dollars: dollars,
             description: description,
             myAccountId: myId!,
-            otherAccountId: otherId,
+            otherAccountId: otherId!,
             password: password,
           );
         } on ApiException catch (e) {

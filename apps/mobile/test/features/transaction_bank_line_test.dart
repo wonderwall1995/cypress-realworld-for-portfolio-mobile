@@ -12,7 +12,6 @@ Map<String, dynamic> item(
   String id, {
   String sender = 'u1',
   String receiver = 'u2',
-  String? requestStatus,
   String status = 'complete',
   int amount = 3000,
   Map<String, dynamic>? myAccount,
@@ -21,7 +20,6 @@ Map<String, dynamic> item(
       id,
       senderId: sender,
       receiverId: receiver,
-      requestStatus: requestStatus,
       status: status,
       amount: amount,
     )..addAll({if (myAccount != null) 'myAccount': myAccount});
@@ -50,12 +48,11 @@ void main() {
       expect(Transaction.fromJson(item('a')..['myAccount'] = null).myAccount, isNull);
     });
 
-    test('money moved: a complete payment, an accepted request, an external deposit', () {
+    test('money moved: a complete payment, an external deposit', () {
       expect(Transaction.fromJson(item('a')).moneyMoved, isTrue);
       expect(Transaction.fromJson(item('a', status: 'pending')).moneyMoved, isFalse);
-      expect(Transaction.fromJson(item('a', requestStatus: 'accepted')).moneyMoved, isTrue);
-      expect(Transaction.fromJson(item('a', requestStatus: 'pending', status: 'pending')).moneyMoved, isFalse);
-      expect(Transaction.fromJson(item('a', requestStatus: 'rejected', status: 'complete')).moneyMoved, isFalse);
+      expect(Transaction.fromJson(item('a', status: 'incomplete')).moneyMoved, isFalse);
+      expect(Transaction.fromJson(item('a', status: '')).moneyMoved, isFalse);
       expect(Transaction.fromJson(item('a', sender: 'external-deposit', receiver: 'u1')).moneyMoved, isTrue);
     });
 
@@ -65,13 +62,6 @@ void main() {
       expect(Transaction.fromJson(item('a', sender: 'u2', receiver: 'u3')).receivedBy('u1'), isNull);
       expect(Transaction.fromJson(item('a', sender: 'u1', receiver: 'u1')).receivedBy('u1'), isNull);
       expect(Transaction.fromJson(item('a')).receivedBy(null), isNull);
-    });
-
-    test('direction: for a request, the receiver pays and the sender (who asked) is paid', () {
-      final asked = item('a', sender: 'u1', receiver: 'u2', requestStatus: 'accepted');
-      final owe = item('b', sender: 'u2', receiver: 'u1', requestStatus: 'accepted');
-      expect(Transaction.fromJson(asked).receivedBy('u1'), isTrue); // I asked, they paid me
-      expect(Transaction.fromJson(owe).receivedBy('u1'), isFalse); // they asked, I paid
     });
 
     test('an external deposit is always received by its receiver', () {
@@ -114,10 +104,10 @@ void main() {
 
     });
 
-    testWidgets('a request still waiting, or rejected, moved no money: no sentence and no balance', (tester) async {
+    testWidgets('a payment that is not complete moved no money: no sentence and no balance', (tester) async {
       final server = serverWith([
-        item('w1', requestStatus: 'pending', status: 'pending', myAccount: account('국민은행')),
-        item('w2', requestStatus: 'rejected', status: 'complete', myAccount: account('국민은행', 5000)),
+        item('w1', status: 'pending', myAccount: account('국민은행')),
+        item('w2', status: 'incomplete', myAccount: account('국민은행', 5000)),
       ]);
       await pumpApp(tester, server);
 
@@ -125,17 +115,6 @@ void main() {
         expect(byId('transaction-bank-line-$id'), findsNothing, reason: id);
         expect(byId('transaction-balance-$id'), findsNothing, reason: id);
       }
-    });
-
-    testWidgets('an accepted request I asked for is 입금; one I paid is 출금', (tester) async {
-      final server = serverWith([
-        item('a1', sender: 'u1', receiver: 'u2', requestStatus: 'accepted', myAccount: account('국민은행', 9000)),
-        item('a2', sender: 'u2', receiver: 'u1', requestStatus: 'accepted', myAccount: account('신한은행', 1000)),
-      ]);
-      await pumpApp(tester, server);
-
-      expect(text('transaction-move-word-a1', '입금'), findsOneWidget);
-      expect(text('transaction-move-word-a2', '출금'), findsOneWidget);
     });
 
     testWidgets('someone else\'s transaction has no account of mine: no sentence, no balance', (tester) async {
@@ -223,10 +202,10 @@ void main() {
       expect(amountColor(tester, 'out1'), Colors.red.shade700);
     });
 
-    testWidgets('a request still waiting is grey, with the sign it will have', (tester) async {
+    testWidgets('a payment that is not complete is grey, with the sign it will have', (tester) async {
       final server = serverWith([
-        item('q1', sender: 'u2', receiver: 'u1', requestStatus: 'pending', status: 'pending', amount: 700), // I will pay
-        item('q2', sender: 'u1', receiver: 'u2', requestStatus: 'pending', status: 'pending', amount: 800), // I will be paid
+        item('q1', sender: 'u1', receiver: 'u2', status: 'pending', amount: 700), // I will pay
+        item('q2', sender: 'u2', receiver: 'u1', status: 'pending', amount: 800), // I will be paid
       ]);
       await pumpApp(tester, server);
       final grey = Theme.of(tester.element(byId('transaction-item-q1'))).colorScheme.onSurfaceVariant;
@@ -235,14 +214,6 @@ void main() {
       expect(text('transaction-amount-q2', '+\$8'), findsOneWidget);
       expect(amountColor(tester, 'q1'), grey);
       expect(amountColor(tester, 'q2'), grey);
-    });
-
-    testWidgets('a rejected request moved no money: grey', (tester) async {
-      final server = serverWith([item('x1', sender: 'u2', receiver: 'u1', requestStatus: 'rejected', status: 'complete', amount: 900)]);
-      await pumpApp(tester, server);
-      final grey = Theme.of(tester.element(byId('transaction-item-x1'))).colorScheme.onSurfaceVariant;
-
-      expect(amountColor(tester, 'x1'), grey);
     });
 
     testWidgets('the detail screen uses the same rule', (tester) async {
