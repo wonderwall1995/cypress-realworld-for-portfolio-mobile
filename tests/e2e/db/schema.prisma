@@ -1,0 +1,41 @@
+// 판정에 쓰는 표와 칸만 적는다. 비밀번호, 이메일, 전화번호, 계좌 번호는 일부러 적지 않는다.
+// 웹 저장소의 schema.prisma 가 원본이다. 여기서 표를 만들거나 바꾸지 않는다 (migrate 를 쓰지 않는다).
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("E2E_DATABASE_URL")
+}
+
+model User {
+  id       String @id
+  username String @unique
+
+  @@map("users")
+}
+
+model BankAccount {
+  id      String  @id
+  userId  String
+  visible Boolean
+  balance Int // 센트
+
+  @@map("bank_accounts")
+}
+
+model BankTransfer {
+  id     String @id
+  userId String
+
+  @@map("bank_transfers")
+}
+
+model Transaction {
+  id         String @id
+  senderId   String
+  receiverId String
+
+  @@map("transactions")
+}
