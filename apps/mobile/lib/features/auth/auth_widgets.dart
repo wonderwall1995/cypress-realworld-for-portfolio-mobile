@@ -26,17 +26,48 @@ String signUpErrorMessage(ApiException e) {
 }
 
 /// An error box above a form. [id] is the web test id (for example `signin-error`).
-class FormErrorBanner extends StatelessWidget {
+///
+/// The button that was refused can be far below. When the box is not in view, the
+/// screen moves until it is; when it is, nothing moves.
+class FormErrorBanner extends StatefulWidget {
   const FormErrorBanner({required this.id, required this.message, super.key});
 
   final String id;
   final String message;
 
   @override
+  State<FormErrorBanner> createState() => _FormErrorBannerState();
+}
+
+class _FormErrorBannerState extends State<FormErrorBanner> {
+  @override
+  void initState() {
+    super.initState();
+    _showIt();
+  }
+
+  @override
+  void didUpdateWidget(FormErrorBanner oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.message != widget.message) _showIt();
+  }
+
+  void _showIt() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Scrollable.ensureVisible(
+        context,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+        duration: const Duration(milliseconds: 200),
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return TestId(
-      id,
+      widget.id,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12),
@@ -44,7 +75,7 @@ class FormErrorBanner extends StatelessWidget {
           color: colors.errorContainer,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Text(message, style: TextStyle(color: colors.onErrorContainer)),
+        child: Text(widget.message, style: TextStyle(color: colors.onErrorContainer)),
       ),
     );
   }

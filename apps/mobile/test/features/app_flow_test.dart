@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -194,6 +196,46 @@ void main() {
       await enter(tester, 'signup-username', 'free');
       await tapId(tester, 'signup-submit');
       expect(byId('signin-submit'), findsOneWidget);
+    });
+
+    testWidgets('the reason comes into view, also the second time, when the button is far below it', (tester) async {
+      const size = Size(360, 640);
+      final server = serverWithAccount(signedIn: false)..takenUsernames.add('used');
+      await pumpApp(tester, server, size: size);
+      await tapId(tester, 'signup');
+      for (final (id, text) in [
+        ('signup-last-name', '홍'),
+        ('signup-first-name', '길동'),
+        ('signup-username', 'used'),
+        ('signup-phone-number', '010-1234-5678'),
+        ('signup-password', 'pw-1234'),
+        ('signup-confirmPassword', 'pw-1234'),
+      ]) {
+        await tester.ensureVisible(byId(id));
+        await enter(tester, id, text);
+      }
+      for (var n = 0; n < 2; n++) {
+        await tester.ensureVisible(byId('signup-submit'));
+        await tester.pumpAndSettle();
+        // The answer takes a moment, as on a real network: the box of the first try goes away.
+        final answer = Completer<void>();
+        server.gate = (_) => answer.future;
+        await tester.tap(byId('signup-submit'));
+        await tester.pump();
+        expect(byId('signup-error'), findsNothing);
+        answer.complete();
+        await tester.pumpAndSettle();
+        final box = tester.getRect(byId('signup-error'));
+        expect(box.top, greaterThanOrEqualTo(tester.getRect(find.byType(AppBar)).bottom), reason: 'try $n');
+        expect(box.bottom, lessThanOrEqualTo(size.height));
+        expect(find.descendant(of: byId('signup-error'), matching: find.byType(Text)).hitTestable(), findsOneWidget);
+      }
+    });
+
+    testWidgets('a reason that is already in view moves nothing', (tester) async {
+      final server = serverWithAccount(signedIn: false)..takenUsernames.add('used');
+      await signUp(tester, server);
+      expect(tester.state<ScrollableState>(find.byType(Scrollable).first).position.pixels, 0);
     });
 
     testWidgets('a 500 of the newer server (JSON) is not blamed on the ID', (tester) async {
