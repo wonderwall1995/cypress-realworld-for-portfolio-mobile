@@ -193,6 +193,8 @@ class _PasswordConfirmDialogState extends ConsumerState<_PasswordConfirmDialog> 
                   onSubmitted: (_) => _confirm(),
                   decoration: const InputDecoration(
                     labelText: '비밀번호',
+                    // No room for a notice: it is in the empty field.
+                    hintText: '이 데모 앱의 비밀번호',
                     isDense: true,
                     border: OutlineInputBorder(),
                   ),

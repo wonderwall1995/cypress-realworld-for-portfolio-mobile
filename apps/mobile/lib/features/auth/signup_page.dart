@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
+import '../../core/demo_notice.dart';
 import '../../core/providers.dart';
 import '../../core/test_id.dart';
 import '../about/original_project_link.dart';
@@ -111,6 +112,8 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                       FormErrorBanner(id: 'signup-error', message: _error!),
                       const SizedBox(height: 16),
                     ],
+                    const DemoNotice(id: 'signup-demo-notice', text: signUpDemoNotice),
+                    const SizedBox(height: 12),
                     const TestId(
                       'signup-name-notice',
                       child: Text('성과 이름이 웹 데모 시연 특성상 공개됩니다. 주의해주세요!'),
@@ -148,6 +151,8 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                         controller: _username,
                         decoration: const InputDecoration(
                           labelText: '사용자 ID',
+                          hintText: '평소 쓰시는 ID는 넣지 마세요!',
+                          floatingLabelBehavior: FloatingLabelBehavior.always,
                           border: OutlineInputBorder(),
                         ),
                         textInputAction: TextInputAction.next,

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/api_client.dart';
+import '../../../core/demo_notice.dart';
 import '../../../core/test_id.dart';
 import '../../auth/auth_widgets.dart';
 import '../../bank_accounts/account_pickers.dart';
@@ -413,6 +414,8 @@ class _PaymentStepState extends ConsumerState<_PaymentStep> {
                       controller: _description,
                       decoration: const InputDecoration(
                         labelText: '메모',
+                        helperText: memoDemoNotice,
+                        helperMaxLines: 4,
                         border: OutlineInputBorder(),
                       ),
                       textInputAction: TextInputAction.done,

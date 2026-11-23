@@ -169,6 +169,7 @@ void main() {
       expect(byId('transaction-confirm-dialog'), findsOneWidget);
       expect(find.text('정말 이체하겠습니까?'), findsOneWidget);
       expect(find.text('자신의 계정 비밀번호를 입력해주세요.'), findsOneWidget);
+      expect(find.text('이 데모 앱의 비밀번호'), findsOneWidget);
       final summary = tester
           .widget<Text>(find.descendant(of: byId('transaction-confirm-summary'), matching: find.byType(Text)))
           .data!
@@ -299,6 +300,7 @@ void main() {
   group('how the form looks (like the web)', () {
     testWidgets('two cards: what I send, and what the other user gets', (tester) async {
       await toForm(tester, newServer());
+      expect(find.text('메모는 다른 사람에게 보일 수 있습니다. 개인 정보는 넣지 마세요.'), findsOneWidget);
       final send = byId('transaction-create-send-card');
       final receive = byId('transaction-create-receive-card');
       for (final id in ['transaction-create-amount-input', 'transaction-create-description-input', 'transaction-create-my-account']) {

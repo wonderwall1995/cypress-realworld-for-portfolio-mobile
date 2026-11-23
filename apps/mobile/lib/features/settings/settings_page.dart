@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_client.dart';
+import '../../core/demo_notice.dart';
 import '../../core/error_text.dart';
 import '../../core/providers.dart';
 import '../../core/session.dart';
@@ -141,13 +142,17 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         children: [
                           InitialAvatar(fullName, radius: 24),
                           const SizedBox(width: 12),
-                          TestId(
-                            'user-settings-username',
-                            child: Text(username == null ? '' : '@$username', style: theme.textTheme.titleMedium),
+                          Expanded(
+                            child: TestId(
+                              'user-settings-username',
+                              child: Text(username == null ? '' : '@$username', style: theme.textTheme.titleMedium),
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
+                      const DemoNotice(id: 'user-settings-demo-notice', text: settingsDemoNotice),
+                      const SizedBox(height: 16),
                       TestId(
                         'user-settings-lastName-input',
                         child: TextFormField(

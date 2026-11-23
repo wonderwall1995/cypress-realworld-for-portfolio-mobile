@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../about/original_project_link.dart';
 import '../../core/api_client.dart';
+import '../../core/demo_notice.dart';
 import '../../core/error_text.dart';
 import '../../core/session.dart';
 import '../../core/test_id.dart';
@@ -94,6 +95,8 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                       FormErrorBanner(id: 'signin-error', message: error),
                       const SizedBox(height: 16),
                     ],
+                    const DemoNotice(id: 'signin-demo-notice', text: signInDemoNotice),
+                    const SizedBox(height: 16),
                     TestId(
                       'signin-username',
                       child: TextFormField(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
+import '../../core/demo_notice.dart';
 import '../../core/error_text.dart';
 import '../../core/providers.dart';
 import '../../core/session.dart';
@@ -325,7 +326,9 @@ class _CommentInputState extends ConsumerState<_CommentInput> {
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _send(),
                     decoration: const InputDecoration(
-                      hintText: '댓글을 입력하세요...',
+                      // No room for a notice above it when the keyboard is open.
+                      hintText: commentDemoHint,
+                      hintMaxLines: 2,
                       border: OutlineInputBorder(),
                       isDense: true,
                     ),
