@@ -8,15 +8,19 @@ import '../../core/test_id.dart';
 String signInErrorMessage(ApiException e) {
   if (e.isConnection) return '서버에 연결할 수 없습니다.';
   if (e.statusCode == 401) return '사용자 ID 또는 비밀번호가 올바르지 않습니다.';
+  if (e.statusCode == 429) return tooManyRequestsText;
   return '로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.';
 }
 
 String signUpErrorMessage(ApiException e) {
   if (e.failure == ApiFailure.notSent) return '서버에 연결할 수 없습니다.';
-  // The server answers 500 for an ID that is already used, so it cannot be told
-  // from another failure.
+  if (e.statusCode == 409) return usernameTakenText;
   if (e.failure == ApiFailure.serverError) {
-    return '회원가입에 실패했습니다. 이미 사용 중인 ID일 수 있습니다. 다른 ID로 다시 시도해 주세요.';
+    // An older server answers an HTML 500 for an ID that is used, so it cannot be told
+    // from another failure. A newer one answers 409 for that, and JSON for the rest.
+    return e.serverMessage == null
+        ? '회원가입에 실패했습니다. 이미 사용 중인 ID일 수 있습니다. 다른 ID로 다시 시도해 주세요.'
+        : '회원가입에 실패했습니다. 잠시 뒤 다시 시도해 주세요.';
   }
   return serverRefusalText(e, base: '회원가입에 실패했습니다');
 }

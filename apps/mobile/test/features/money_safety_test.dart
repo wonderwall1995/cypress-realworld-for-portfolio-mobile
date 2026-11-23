@@ -238,6 +238,38 @@ void main() {
     });
   });
 
+  group('the password was wrong too often (429)', () {
+    const text = '비밀번호를 여러 번 틀렸습니다. 10분 뒤에 다시 시도하세요';
+
+    testWidgets('at the check: says so, also for the right password, and nothing is sent', (tester) async {
+      final server = newServer()..wrongPasswords = 9;
+      await openTransfer(tester, server);
+      await tapId(tester, 'transaction-create-submit-payment');
+      await confirmTransfer(tester, password: 'nope');
+      expect(find.text('비밀번호가 맞지 않습니다'), findsOneWidget); // the 10th
+      await confirmTransfer(tester);
+
+      expect(find.text(text), findsOneWidget);
+      expect(find.textContaining('too many'), findsNothing);
+      expect(byId('transaction-confirm-reselect'), findsNothing);
+      expect(calls(server, 'POST /transactions'), 0);
+    });
+
+    testWidgets('at the transfer: the same, and other accounts are not offered', (tester) async {
+      final server = newServer()
+        ..createTransactionStatus = 429
+        ..createTransactionMessage = 'too many wrong passwords, try again later';
+      await openTransfer(tester, server);
+      await payNow(tester);
+
+      expect(find.text(text), findsOneWidget);
+      expect(find.textContaining('too many'), findsNothing);
+      expect(byId('transaction-confirm-reselect'), findsNothing);
+      expect(byId('unconfirmed-dialog'), findsNothing);
+      expect(find.text('이체 완료'), findsNothing);
+    });
+  });
+
   group('sending again after an unknown result', () {
     Future<void> again(WidgetTester tester) async {
       await tapId(tester, 'sidenav-my-account');

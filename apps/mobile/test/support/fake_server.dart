@@ -140,6 +140,9 @@ class FakeServer {
   bool loginOk = true;
   bool down = false;
   bool failSignUp = false;
+
+  /// A 500 with JSON at sign-up, as the newer server sends it.
+  bool signUpServerError = false;
   bool failAccountList = false;
   bool failAccountCreate = false;
   bool failAccountDelete = false;
@@ -292,6 +295,28 @@ class FakeServer {
   /// Requests that get a 200 the app cannot read.
   final Set<String> strangeAnswer = {};
 
+  /// Requests the proxy refuses (429, an HTML page).
+  final Set<String> rateLimited = {};
+
+  /// User names that are used (409 at sign-up).
+  final Set<String> takenUsernames = {};
+
+  /// How often the password was wrong. After 10 the server answers 429 (also for the
+  /// right one), at the check and at the transfer.
+  int wrongPasswords = 0;
+
+  ResponseBody? _passwordRefusal(Object? given) {
+    if (wrongPasswords >= 10) {
+      return jsonBody(429, {'error': 'too many wrong passwords, try again later'});
+    }
+    if (given == password) {
+      wrongPasswords = 0;
+      return null;
+    }
+    wrongPasswords++;
+    return jsonBody(403, {'error': 'the password is not correct'});
+  }
+
   /// The server forgot the session (a restart, for example): every protected
   /// request answers 401.
   bool sessionLost = false;
@@ -320,6 +345,11 @@ class FakeServer {
         Headers.contentTypeHeader: ['text/html'],
       });
     }
+    if (rateLimited.contains(key)) {
+      return ResponseBody.fromString('<html><h1>429 Too Many Requests</h1></html>', 429, headers: {
+        Headers.contentTypeHeader: ['text/html'],
+      });
+    }
     if (strangeAnswer.contains(key)) return jsonBody(200, {'nothing': 'here', 'results': 'text', 'account': 1, 'transaction': 1});
     if (sessionLost && !const {'POST /login', 'POST /users'}.contains(key)) {
       return jsonBody(401, {'error': 'Unauthorized'});
@@ -336,6 +366,7 @@ class FakeServer {
         sessionLost = false;
         return jsonBody(200, {'user': user});
       case 'POST /users':
+        if (signUpServerError) return jsonBody(500, {'error': 'internal server error'});
         if (failSignUp) return jsonBody(400, {'error': 'bad'});
         // Like the real server: a phone number is required at sign-up.
         final phone = (o.data as Map<String, dynamic>)['phoneNumber'];
@@ -345,6 +376,9 @@ class FakeServer {
               {'msg': 'phoneNumber is required and must be a valid phone number', 'param': 'phoneNumber', 'location': 'body'},
             ],
           });
+        }
+        if (takenUsernames.contains((o.data as Map<String, dynamic>)['username'])) {
+          return jsonBody(409, {'error': 'this username is already taken'});
         }
         return jsonBody(201, {'user': testUser});
       case 'GET /users':
@@ -381,7 +415,8 @@ class FakeServer {
         final myAccount = mineFound.first;
         final cents = (body['amount'] as int) * 100;
         if (!isRequest) {
-          if (body['password'] != password) return jsonBody(403, {'error': 'the password is not correct'});
+          final refusal = _passwordRefusal(body['password']);
+          if (refusal != null) return refusal;
           if (body['otherAccountId'] is! String) {
             return jsonBody(422, {
               'errors': [
@@ -413,10 +448,8 @@ class FakeServer {
         if (!isRequest) balance -= created['amount'] as int;
         return jsonBody(200, {'transaction': created});
       case 'POST /users/verifyPassword':
-        final given = (o.data as Map<String, dynamic>)['password'];
-        return given == password
-            ? ResponseBody.fromString('', 204)
-            : jsonBody(403, {'error': 'the password is not correct'});
+        return _passwordRefusal((o.data as Map<String, dynamic>)['password']) ??
+            ResponseBody.fromString('', 204);
       case 'POST /logout':
         signedIn = false;
         return ResponseBody.fromString('', 302);

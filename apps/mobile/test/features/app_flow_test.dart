@@ -170,7 +170,54 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('an ID that is used (the server answers 500): says it may be that', (tester) async {
+    Future<void> signUp(WidgetTester tester, FakeServer server, {String id = 'used'}) async {
+      await pumpApp(tester, server);
+      await tapId(tester, 'signup');
+      await enter(tester, 'signup-last-name', '홍');
+      await enter(tester, 'signup-first-name', '길동');
+      await enter(tester, 'signup-username', id);
+      await enter(tester, 'signup-phone-number', '010-1234-5678');
+      await enter(tester, 'signup-password', 'pw-1234');
+      await enter(tester, 'signup-confirmPassword', 'pw-1234');
+      await tapId(tester, 'signup-submit');
+    }
+
+    Finder error(String text) => find.descendant(of: byId('signup-error'), matching: find.text(text));
+
+    testWidgets('an ID that is used (409): says exactly that and keeps what was typed', (tester) async {
+      final server = serverWithAccount(signedIn: false)..takenUsernames.add('used');
+      await signUp(tester, server);
+      expect(error('이미 사용 중인 사용자 ID입니다'), findsOneWidget);
+      expect(find.text('used'), findsOneWidget);
+      expect(find.textContaining('already taken'), findsNothing);
+
+      await enter(tester, 'signup-username', 'free');
+      await tapId(tester, 'signup-submit');
+      expect(byId('signin-submit'), findsOneWidget);
+    });
+
+    testWidgets('a 500 of the newer server (JSON) is not blamed on the ID', (tester) async {
+      final server = serverWithAccount(signedIn: false)..signUpServerError = true;
+      await signUp(tester, server);
+      expect(error('회원가입에 실패했습니다. 잠시 뒤 다시 시도해 주세요.'), findsOneWidget);
+      expect(find.textContaining('이미 사용 중'), findsNothing);
+      expect(find.textContaining('internal'), findsNothing);
+    });
+
+    testWidgets('too many requests (the proxy, an HTML page): says so at sign-up and at sign-in', (tester) async {
+      const text = '요청이 많습니다. 잠시 뒤 다시 시도하세요';
+      final server = serverWithAccount(signedIn: false)..rateLimited.addAll({'POST /users', 'POST /login'});
+      await signUp(tester, server);
+      expect(error(text), findsOneWidget);
+      await goBack(tester);
+      await enter(tester, 'signin-username', 'tester');
+      await enter(tester, 'signin-password', 'pw-1234');
+      await tapId(tester, 'signin-submit');
+      expect(find.descendant(of: byId('signin-error'), matching: find.text(text)), findsOneWidget);
+      expect(find.textContaining('429'), findsNothing);
+    });
+
+    testWidgets('an older server (an HTML 500 for an ID that is used): says it may be that', (tester) async {
       final server = serverWithAccount(signedIn: false)..htmlError.add('POST /users');
       await pumpApp(tester, server);
       await tapId(tester, 'signup');

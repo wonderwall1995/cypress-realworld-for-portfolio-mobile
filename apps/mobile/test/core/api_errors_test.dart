@@ -96,6 +96,12 @@ void main() {
       expect(text(400, server: 'an account with a balance cannot be deleted'), '잔액이 있는 계좌는 삭제할 수 없습니다');
     });
 
+    test('429: the password, or just too many requests', () {
+      expect(text(429, server: 'too many wrong passwords, try again later'), tooManyPasswordsText);
+      expect(text(429), tooManyRequestsText);
+      expect(text(429, server: 'slow down'), tooManyRequestsText); // never the English reason
+    });
+
     test('403 is a wrong password only when the server says so', () {
       ApiException e(String m) => ApiException(m, statusCode: 403, serverMessage: m);
       expect(isWrongPassword(e('the password is not correct')), isTrue);

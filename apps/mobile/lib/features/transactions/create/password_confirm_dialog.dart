@@ -108,7 +108,8 @@ class _PasswordConfirmDialogState extends ConsumerState<_PasswordConfirmDialog> 
           _password.clear();
         } else {
           // 400, 403, 404: the accounts (their owner, their money) are the reason.
-          _canReselect = e.failure == ApiFailure.refused;
+          // 429 is about the password, so choosing other accounts does not help.
+          _canReselect = e.failure == ApiFailure.refused && e.statusCode != 429;
         }
       });
     } finally {
@@ -127,6 +128,8 @@ class _PasswordConfirmDialogState extends ConsumerState<_PasswordConfirmDialog> 
         if (e.statusCode == 403) {
           _error = '비밀번호가 맞지 않습니다';
           _password.clear();
+        } else if (e.statusCode == 429) {
+          _error = tooManyPasswordsText;
         } else {
           _error = '비밀번호를 확인하지 못했습니다. 잠시 뒤 다시 시도하세요';
         }
