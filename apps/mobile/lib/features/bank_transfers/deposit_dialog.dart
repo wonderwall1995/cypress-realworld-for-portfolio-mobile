@@ -11,6 +11,7 @@ import '../auth/auth_widgets.dart';
 import '../bank_accounts/bank_account.dart';
 import '../bank_accounts/bank_accounts_controller.dart';
 import '../money/money_status.dart';
+import '../money/unconfirmed.dart';
 import '../transactions/amount_input.dart';
 import '../transactions/transaction.dart';
 import 'bank_transfer.dart';
@@ -68,9 +69,20 @@ class _DepositDialogState extends ConsumerState<DepositDialog> {
     final accountId = _selectedId(bankAccounts);
     if (accountId == null) return;
     final bankName = bankAccounts.where((a) => a.id == accountId).firstOrNull?.bankName;
+    switch (await askBeforeSending(context, ref, MoneyKind.deposit)) {
+      case BeforeSending.send:
+        break;
+      case BeforeSending.history:
+        if (mounted) _checkHistory();
+        return;
+      case BeforeSending.cancel:
+        return;
+    }
+    if (!mounted || _busy) return;
     // Keep these before the await: the dialog may be gone after it.
     final messenger = ScaffoldMessenger.of(context);
     final money = ref.read(moneyStatusProvider.notifier);
+    final unconfirmed = ref.read(unconfirmedMoneyProvider.notifier);
 
     setState(() {
       _busy = true;
@@ -99,6 +111,12 @@ class _DepositDialogState extends ConsumerState<DepositDialog> {
       );
       if (mounted) _close();
     } on ApiException catch (e) {
+      if (e.resultUnknown) {
+        unconfirmed.add(
+          MoneyKind.deposit,
+          '${bankName ?? '은행 계좌'}에 입금 ${formatUsd(dollars * 100)}',
+        );
+      }
       if (!mounted) return;
       setState(() {
         _error = bankTransferErrorMessage(e, isDeposit: true);

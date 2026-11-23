@@ -113,7 +113,7 @@ void main() {
       await pumpApp(tester, newServer());
       await openCreate(tester);
 
-      expect(find.text('새 거래'), findsWidgets);
+      expect(find.text('이체'), findsWidgets);
       expect(byId('user-list-item-u2'), findsOneWidget);
       expect(byId('user-list-item-u3'), findsOneWidget);
       expect(find.text('Test Bob'), findsOneWidget);

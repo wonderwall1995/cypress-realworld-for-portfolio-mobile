@@ -26,7 +26,12 @@ void main() {
     });
 
     test('sent, no answer: the result is unknown', () async {
-      for (final type in [DioExceptionType.receiveTimeout, DioExceptionType.sendTimeout, DioExceptionType.unknown]) {
+      for (final type in [
+        DioExceptionType.receiveTimeout,
+        DioExceptionType.sendTimeout,
+        DioExceptionType.unknown,
+        DioExceptionType.badCertificate,
+      ]) {
         final e = await failureOf((o) => throw dio(o, type));
         expect((e.failure, e.isConnection, e.resultUnknown), (ApiFailure.noAnswer, true, true), reason: '$type');
       }

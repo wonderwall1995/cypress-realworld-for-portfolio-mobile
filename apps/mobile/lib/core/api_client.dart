@@ -61,10 +61,11 @@ class ApiException implements Exception {
           : ApiFailure.badResponse;
     } else {
       failure = switch (e.type) {
+        // Dio raises these only while it opens the connection, before the body.
         DioExceptionType.connectionError ||
-        DioExceptionType.connectionTimeout ||
-        DioExceptionType.badCertificate => ApiFailure.notSent,
-        // Sent (or partly sent): a timeout, a reset, a cancel.
+        DioExceptionType.connectionTimeout => ApiFailure.notSent,
+        // Sent (or partly sent): a timeout, a reset, a cancel. The certificate is
+        // checked after the request, too.
         _ => ApiFailure.noAnswer,
       };
     }

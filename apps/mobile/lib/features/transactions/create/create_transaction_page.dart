@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/api_client.dart';
 import '../../../core/test_id.dart';
 import '../../auth/auth_widgets.dart';
 import '../../bank_accounts/account_pickers.dart';
@@ -11,6 +12,7 @@ import '../../bank_accounts/bank_account.dart';
 import '../../bank_accounts/bank_accounts_controller.dart';
 import '../../bank_accounts/other_account.dart';
 import '../../money/money_status.dart';
+import '../../money/unconfirmed.dart';
 import '../amount_input.dart';
 import '../transaction.dart';
 import '../transaction_widgets.dart';
@@ -37,7 +39,7 @@ class CreateTransactionPage extends ConsumerWidget {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('새 거래'),
+          title: const Text('이체'),
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(40),
             child: _StepHeader(step: state.step),
@@ -285,6 +287,20 @@ class _PaymentStepState extends ConsumerState<_PaymentStep> {
     });
     if (!formOk || myError != null || otherError != null) return;
 
+    // Or the keyboard comes back over the form when the dialog is closed.
+    FocusManager.instance.primaryFocus?.unfocus();
+    switch (await askBeforeSending(context, ref, MoneyKind.transfer)) {
+      case BeforeSending.send:
+        break;
+      case BeforeSending.history:
+        if (mounted) _goToHistory();
+        return;
+      case BeforeSending.cancel:
+        return;
+    }
+    if (!mounted) return;
+    final unconfirmed = ref.read(unconfirmedMoneyProvider.notifier);
+
     // The last step: the user's own password, checked before any money moves.
     final other = others.where((a) => a.id == otherId).firstOrNull;
     // The dialog checks the password and sends the transfer. It closes, and the
@@ -302,14 +318,26 @@ class _PaymentStepState extends ConsumerState<_PaymentStep> {
         formatUsd(cents!),
       ],
       confirmLabel: '이체',
-      send: (password) => controller.submit(
-        type: 'payment',
-        dollars: dollars,
-        description: description,
-        myAccountId: myId!,
-        otherAccountId: otherId,
-        password: password,
-      ),
+      send: (password) async {
+        try {
+          await controller.submit(
+            type: 'payment',
+            dollars: dollars,
+            description: description,
+            myAccountId: myId!,
+            otherAccountId: otherId,
+            password: password,
+          );
+        } on ApiException catch (e) {
+          if (e.resultUnknown) {
+            unconfirmed.add(
+              MoneyKind.transfer,
+              '${widget.receiver.fullName}님에게 이체 ${formatUsd(cents)}',
+            );
+          }
+          rethrow;
+        }
+      },
     );
     if (!mounted) return;
     switch (end) {
@@ -323,11 +351,15 @@ class _PaymentStepState extends ConsumerState<_PaymentStep> {
         // Closed by hand, maybe after a refusal.
         _readAccountsAgain();
       case ConfirmEnd.unknown:
-        unawaited(ref.read(moneyStatusProvider.notifier).refresh());
-        context.go('/');
+        _goToHistory();
       case ConfirmEnd.approved:
         break;
     }
+  }
+
+  void _goToHistory() {
+    unawaited(ref.read(moneyStatusProvider.notifier).refresh());
+    context.go('/');
   }
 
   /// The accounts on this screen may be old.

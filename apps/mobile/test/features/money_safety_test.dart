@@ -238,6 +238,118 @@ void main() {
     });
   });
 
+  group('sending again after an unknown result', () {
+    Future<void> again(WidgetTester tester) async {
+      await tapId(tester, 'sidenav-my-account');
+      await tapId(tester, 'sidenav-deposit');
+      await enter(tester, 'deposit-amount-input', '9');
+      await tapId(tester, 'deposit-submit-button');
+    }
+
+    testWidgets('a deposit: asks first, also after the dialog was closed and opened again', (tester) async {
+      final server = newServer()..loseAnswer.add('POST /bankTransfers');
+      await openDeposit(tester, server);
+      await tapId(tester, 'deposit-submit-button');
+      await tapId(tester, 'deposit-cancel-button'); // 닫기
+      await tapId(tester, 'sidenav-home');
+      server.loseAnswer.clear();
+
+      await again(tester);
+      expect(byId('unconfirmed-dialog'), findsOneWidget);
+      expect(find.textContaining('First Bank에 입금 \$5'), findsOneWidget); // what it was, not the new amount
+      expect(calls(server, 'POST /bankTransfers'), 1);
+
+      await tapId(tester, 'unconfirmed-cancel');
+      expect(calls(server, 'POST /bankTransfers'), 1);
+      expect(byId('deposit-dialog'), findsOneWidget); // what was typed stays
+
+      // Cancelling is not confirming: it asks again.
+      await tapId(tester, 'deposit-submit-button');
+      await tapId(tester, 'unconfirmed-send');
+      expect(calls(server, 'POST /bankTransfers'), 2);
+
+      // Confirmed once: not asked any more.
+      await again(tester);
+      expect(byId('unconfirmed-dialog'), findsNothing);
+      expect(calls(server, 'POST /bankTransfers'), 3);
+    });
+
+    testWidgets('a deposit: 내역 확인 leads to the history and sends nothing', (tester) async {
+      final server = newServer()..loseAnswer.add('POST /bankTransfers');
+      await openDeposit(tester, server);
+      await tapId(tester, 'deposit-submit-button');
+      await tapId(tester, 'deposit-check-history');
+      await again(tester);
+      await tapId(tester, 'unconfirmed-check-history');
+      expect(byId('deposit-dialog'), findsNothing);
+      expect(find.text('입금 · First Bank'), findsOneWidget);
+      expect(calls(server, 'POST /bankTransfers'), 1);
+    });
+
+    testWidgets('a transfer: asks before the password, and a deposit is not asked about', (tester) async {
+      final server = newServer()..loseAnswer.add('POST /transactions');
+      await openTransfer(tester, server);
+      await payNow(tester);
+      await tapId(tester, 'transaction-confirm-cancel'); // 닫기: back on the form
+      server.loseAnswer.clear();
+
+      await tapId(tester, 'transaction-create-submit-payment');
+      expect(byId('unconfirmed-dialog'), findsOneWidget);
+      expect(find.textContaining('Test Bob님에게 이체 \$5'), findsOneWidget);
+      expect(byId('transaction-confirm-dialog'), findsNothing);
+      await tapId(tester, 'unconfirmed-check-history');
+      expect(byId('nav-transaction-tabs'), findsOneWidget);
+
+      await again(tester); // a deposit
+      expect(byId('unconfirmed-dialog'), findsNothing);
+      expect(calls(server, 'POST /transactions'), 1);
+    });
+
+    testWidgets('a refusal, or a request that never left, is not asked about', (tester) async {
+      final server = newServer();
+      await openDeposit(tester, server);
+      server.down = true;
+      await tapId(tester, 'deposit-submit-button');
+      server.down = false;
+      server.moveMoneyStatus = 400;
+      await tapId(tester, 'deposit-submit-button');
+      server.moveMoneyStatus = null;
+      await tapId(tester, 'deposit-submit-button');
+      expect(byId('unconfirmed-dialog'), findsNothing);
+      expect(server.transfers, hasLength(1));
+    });
+
+    testWidgets('another user is not asked about it', (tester) async {
+      final server = newServer()..loseAnswer.add('POST /bankTransfers');
+      await openDeposit(tester, server);
+      await tapId(tester, 'deposit-submit-button');
+      await tapId(tester, 'deposit-cancel-button');
+      server.loseAnswer.clear();
+      await tapId(tester, 'sidenav-more');
+      await tapId(tester, 'sidenav-signout');
+      server.profile['id'] = 'u9';
+      await enter(tester, 'signin-username', 'bbb');
+      await enter(tester, 'signin-password', 'pw-1234');
+      await tapId(tester, 'signin-submit');
+
+      await again(tester);
+      expect(byId('unconfirmed-dialog'), findsNothing);
+    });
+  });
+
+  testWidgets('closing the password dialog does not bring the keyboard back over the form', (tester) async {
+    await openTransfer(tester, newServer());
+    await tester.tap(fieldIn('transaction-create-description-input'));
+    await tester.pumpAndSettle();
+    expect(tester.testTextInput.isVisible, isTrue);
+
+    await tapId(tester, 'transaction-create-submit-payment');
+    await tapId(tester, 'transaction-confirm-cancel');
+
+    expect(byId('transaction-create-form'), findsOneWidget);
+    expect(tester.testTextInput.isVisible, isFalse);
+  });
+
   group('the accounts of the form', () {
     testWidgets('an account that was deleted somewhere else is not chosen any more (no crash)', (tester) async {
       final server = newServer(accounts: [
