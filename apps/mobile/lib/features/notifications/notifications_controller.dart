@@ -8,7 +8,7 @@ import '../../core/session.dart';
 import '../money/money_status.dart';
 import 'app_notification.dart';
 
-/// The signed-in user's unread notifications.
+/// The signed-in user's notifications, the read ones too (paler, like the web).
 ///
 /// The list is loaded when the user signs in or the app starts, when the 알림 tab
 /// is opened, when the user pulls down, and while the app is in view
@@ -45,7 +45,10 @@ class NotificationsController extends AsyncNotifier<List<AppNotification>> {
     if (announce &&
         known != null &&
         list.any(
-          (n) => n.kind == NotificationKind.received && !known.contains(n.id),
+          (n) =>
+              n.kind == NotificationKind.received &&
+              !n.isRead &&
+              !known.contains(n.id),
         )) {
       ref.read(moneyStatusProvider.notifier).changed();
     }
@@ -83,7 +86,7 @@ class NotificationsController extends AsyncNotifier<List<AppNotification>> {
     _see(pushed, announce: true);
     return [
       for (final n in [...pushed.reversed, ...list])
-        if (!_read.contains(n.id)) n,
+        _read.contains(n.id) ? n.asRead() : n,
     ];
   }
 
@@ -122,7 +125,10 @@ class NotificationsController extends AsyncNotifier<List<AppNotification>> {
     }
     if (!ref.mounted) return;
     _read.add(id);
-    state = AsyncData([...?state.value]..removeWhere((n) => n.id == id));
+    state = AsyncData([
+      for (final n in state.value ?? const <AppNotification>[])
+        n.id == id ? n.asRead() : n,
+    ]);
   }
 }
 
@@ -136,5 +142,11 @@ final notificationsProvider =
 
 /// How many unread notifications there are (0 while loading or on error).
 final unreadCountProvider = Provider.autoDispose<int>(
-  (ref) => ref.watch(notificationsProvider).value?.length ?? 0,
+  (ref) =>
+      ref
+          .watch(notificationsProvider)
+          .value
+          ?.where((n) => !n.isRead)
+          .length ??
+      0,
 );

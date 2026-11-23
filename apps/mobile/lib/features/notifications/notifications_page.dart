@@ -8,8 +8,9 @@ import '../../core/test_id.dart';
 import 'app_notification.dart';
 import 'notifications_controller.dart';
 
-/// The "알림" tab: unread notifications. Each one has a "읽음" button; tapping
-/// the row opens the transaction (and does not mark it read).
+/// The "알림" tab: the notifications, newest first. An unread one has a "확인" button;
+/// a read one is paler and has none (like the web). Tapping a row opens the
+/// transaction (and does not mark it read).
 class NotificationsPage extends ConsumerWidget {
   const NotificationsPage({super.key});
 
@@ -136,16 +137,22 @@ class _NotificationTileState extends ConsumerState<_NotificationTile> {
     final notification = widget.notification;
     return TestId(
       'notification-list-item-${notification.id}',
-      child: ListTile(
-        leading: Icon(_iconFor(notification.kind)),
-        title: Text(notification.message),
-        onTap: () => context.push('/transaction/${notification.transactionId}'),
-        trailing: TestId(
-          'notification-mark-read-${notification.id}',
-          child: TextButton(
-            onPressed: _busy ? null : _markRead,
-            child: const Text('읽음'),
-          ),
+      child: Opacity(
+        // Paler than an unread one, but the text can still be read.
+        opacity: notification.isRead ? 0.65 : 1,
+        child: ListTile(
+          leading: Icon(_iconFor(notification.kind)),
+          title: Text(notification.message),
+          onTap: () => context.push('/transaction/${notification.transactionId}'),
+          trailing: notification.isRead
+              ? null
+              : TestId(
+                  'notification-mark-read-${notification.id}',
+                  child: TextButton(
+                    onPressed: _busy ? null : _markRead,
+                    child: const Text('확인'),
+                  ),
+                ),
         ),
       ),
     );

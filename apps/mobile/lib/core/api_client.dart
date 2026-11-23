@@ -510,10 +510,14 @@ class ApiClient {
     }
   }
 
-  /// The signed-in user's unread notifications (the server sends only unread ones).
+  /// The signed-in user's notifications: every unread one and the newest read ones.
+  /// A server that does not know `include` sends only the unread ones.
   Future<List<Map<String, dynamic>>> getNotifications() async {
     try {
-      final response = await dio.get<Map<String, dynamic>>('/notifications');
+      final response = await dio.get<Map<String, dynamic>>(
+        '/notifications',
+        queryParameters: {'include': 'read'},
+      );
       final results = response.data?['results'] as List<dynamic>? ?? const [];
       return results.cast<Map<String, dynamic>>().toList();
     } on DioException catch (e) {

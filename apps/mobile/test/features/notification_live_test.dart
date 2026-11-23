@@ -107,6 +107,18 @@ void main() {
       expect(byId('amounts-changed-notice'), findsNothing);
     });
 
+    testWidgets('one that was already read on the web when the app sees it does not show it', (tester) async {
+      final server = newServer();
+      await pumpApp(tester, server, live: true);
+      await settle(tester);
+      server.closeStreams();
+      await settle(tester);
+      server.notifications.add({...testNotification('n9', 'received'), 'isRead': true});
+      await tester.pump(const Duration(seconds: 5));
+      await settle(tester);
+      expect(byId('amounts-changed-notice'), findsNothing);
+    });
+
     testWidgets('one that arrived while the stream was down shows it after reconnecting', (tester) async {
       final server = newServer();
       await pumpApp(tester, server, live: true);
@@ -384,12 +396,13 @@ void main() {
       server.gate = null;
       await tester.tap(byId('notification-mark-read-n1'));
       await settle(tester);
-      expect(byId('notification-list-item-n1'), findsNothing);
+      expect(byId('notification-mark-read-n1'), findsNothing);
 
       hold.complete(); // the old list still has n1
       await settle(tester);
-      expect(byId('notification-list-item-n1'), findsNothing);
-      expect(byId('notification-list-item-n2'), findsOneWidget);
+      expect(byId('notification-mark-read-n1'), findsNothing);
+      expect(byId('notification-mark-read-n2'), findsOneWidget);
+      expect(badge('1'), findsOneWidget);
     });
 
     testWidgets('a pushed notification is not lost to an older list', (tester) async {

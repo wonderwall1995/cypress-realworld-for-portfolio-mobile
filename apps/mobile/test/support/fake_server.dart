@@ -213,9 +213,12 @@ class FakeServer {
     streams.clear();
   }
 
-  /// Unread notifications. Marking one as read removes it from the list.
+  /// Every notification. Marking one as read sets its `isRead`.
   final List<Map<String, dynamic>> notifications = [];
   bool failNotifications = false;
+
+  /// A server that does not know `?include=read`: only unread ones come.
+  bool oldNotificationServer = false;
   bool failMarkRead = false;
   bool failLike = false;
   bool failComment = false;
@@ -580,12 +583,19 @@ class FakeServer {
     if (o.method == 'GET' && o.path == '/notifications') {
       return failNotifications
           ? jsonBody(500, {'error': 'boom'})
-          : jsonBody(200, {'results': [...notifications]});
+          : jsonBody(200, {
+              'results': [
+                for (final n in notifications)
+                  if (n['isRead'] != true || (o.queryParameters['include'] == 'read' && !oldNotificationServer)) n,
+              ],
+            });
     }
     if (o.method == 'PATCH' && o.path.startsWith('/notifications/')) {
       if (failMarkRead) return jsonBody(500, {'error': 'boom'});
       final id = o.path.substring('/notifications/'.length);
-      notifications.removeWhere((n) => n['id'] == id);
+      for (final n in notifications.where((n) => n['id'] == id)) {
+        n['isRead'] = true;
+      }
       return ResponseBody.fromString('', 204);
     }
     if (o.method == 'POST' && o.path.startsWith('/likes/')) {

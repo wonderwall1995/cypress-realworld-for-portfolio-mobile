@@ -1,6 +1,6 @@
 enum NotificationKind { requested, received, like, comment }
 
-/// One unread notification. [userFullName] is what the server sends.
+/// One notification, read or not. [userFullName] is what the server sends.
 /// For "received" it is the name of the user who sent the money ("성 이름").
 /// Requests no longer exist, but an old "requested" notification can still be
 /// in the list, so it is still shown.
@@ -10,6 +10,7 @@ class AppNotification {
     required this.transactionId,
     required this.kind,
     required this.userFullName,
+    this.isRead = false,
   });
 
   /// Returns null for a notification of a kind the app does not know.
@@ -29,6 +30,7 @@ class AppNotification {
       transactionId: json['transactionId'] as String,
       kind: kind,
       userFullName: json['userFullName'] as String? ?? '',
+      isRead: json['isRead'] == true,
     );
   }
 
@@ -36,6 +38,17 @@ class AppNotification {
   final String transactionId;
   final NotificationKind kind;
   final String userFullName;
+  final bool isRead;
+
+  AppNotification asRead() => isRead
+      ? this
+      : AppNotification(
+          id: id,
+          transactionId: transactionId,
+          kind: kind,
+          userFullName: userFullName,
+          isRead: true,
+        );
 
   /// Korean text, same meaning as the web text.
   String get message => switch (kind) {
