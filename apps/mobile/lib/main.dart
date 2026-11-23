@@ -20,6 +20,7 @@ Future<void> main() async {
   final cookieJar = await createPersistentCookieJar();
   runApp(
     ProviderScope(
+      retry: noRetry,
       overrides: [
         appConfigProvider.overrideWithValue(config),
         cookieJarProvider.overrideWithValue(cookieJar),

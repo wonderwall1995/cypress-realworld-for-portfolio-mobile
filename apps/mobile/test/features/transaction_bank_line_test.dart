@@ -37,7 +37,7 @@ Map<String, dynamic> account(String bank, [int? balanceAfter]) => {
 Finder text(String id, String what) => find.descendant(of: byId(id), matching: find.text(what));
 
 Color wordColor(WidgetTester tester, String id) =>
-    tester.widget<Text>(find.descendant(of: byId('transaction-bank-move-$id'), matching: find.byType(Text))).style!.color!;
+    tester.widget<Text>(find.descendant(of: byId('transaction-move-word-$id'), matching: find.byType(Text))).style!.color!;
 
 void main() {
   group('Transaction', () {
@@ -87,19 +87,19 @@ void main() {
       await pumpApp(tester, server);
 
       expect(text('transaction-bank-name-p1', '국민은행'), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-bank-sentence-p1'), matching: find.text(' 계좌에서')), findsOneWidget);
-      expect(text('transaction-bank-move-p1', '출금'), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-bank-line-p1'), matching: find.text(' 계좌에서')), findsOneWidget);
+      expect(text('transaction-move-word-p1', '출금'), findsOneWidget);
       expect(wordColor(tester, 'p1'), Colors.red.shade700);
-      expect(find.descendant(of: byId('transaction-bank-sentence-p1'), matching: find.text(' 되었습니다.')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-bank-line-p1'), matching: find.text(' 되었습니다.')), findsOneWidget);
     });
 
     testWidgets('a payment I received says 계좌로 입금 되었습니다 with 입금 in green', (tester) async {
       final server = serverWith([item('p2', sender: 'u2', receiver: 'u1', myAccount: account('신한은행', 3000))]);
       await pumpApp(tester, server);
 
-      expect(find.descendant(of: byId('transaction-bank-sentence-p2'), matching: find.text(' 계좌로')), findsOneWidget);
-      expect(text('transaction-bank-move-p2', '입금'), findsOneWidget);
-      expect(wordColor(tester, 'p2'), Colors.green.shade700);
+      expect(find.descendant(of: byId('transaction-bank-line-p2'), matching: find.text(' 계좌로')), findsOneWidget);
+      expect(text('transaction-move-word-p2', '입금'), findsOneWidget);
+      expect(wordColor(tester, 'p2'), Colors.green.shade800);
     });
 
     testWidgets('the order is the title, the bank line, then the memo', (tester) async {
@@ -107,7 +107,7 @@ void main() {
       await pumpApp(tester, server);
 
       final title = tester.getTopLeft(byId('transaction-title-p1')).dy;
-      final sentence = tester.getTopLeft(byId('transaction-bank-sentence-p1')).dy;
+      final sentence = tester.getTopLeft(byId('transaction-bank-line-p1')).dy;
       final memoText = find.descendant(of: byId('transaction-item-p1'), matching: find.text(testTransaction('p1')['description'] as String));
       expect(title, lessThan(sentence));
       expect(sentence, lessThan(tester.getTopLeft(memoText).dy));
@@ -122,7 +122,7 @@ void main() {
       await pumpApp(tester, server);
 
       for (final id in ['w1', 'w2']) {
-        expect(byId('transaction-bank-sentence-$id'), findsNothing, reason: id);
+        expect(byId('transaction-bank-line-$id'), findsNothing, reason: id);
         expect(byId('transaction-balance-$id'), findsNothing, reason: id);
       }
     });
@@ -134,8 +134,8 @@ void main() {
       ]);
       await pumpApp(tester, server);
 
-      expect(text('transaction-bank-move-a1', '입금'), findsOneWidget);
-      expect(text('transaction-bank-move-a2', '출금'), findsOneWidget);
+      expect(text('transaction-move-word-a1', '입금'), findsOneWidget);
+      expect(text('transaction-move-word-a2', '출금'), findsOneWidget);
     });
 
     testWidgets('someone else\'s transaction has no account of mine: no sentence, no balance', (tester) async {
@@ -143,7 +143,7 @@ void main() {
       await pumpApp(tester, server);
 
       expect(byId('transaction-item-o1'), findsOneWidget);
-      expect(byId('transaction-bank-sentence-o1'), findsNothing);
+      expect(byId('transaction-bank-line-o1'), findsNothing);
       expect(byId('transaction-balance-o1'), findsNothing);
     });
 
@@ -151,7 +151,7 @@ void main() {
       final server = serverWith([item('p9')]);
       await pumpApp(tester, server);
 
-      expect(byId('transaction-bank-sentence-p9'), findsNothing);
+      expect(byId('transaction-bank-line-p9'), findsNothing);
     });
   });
 
@@ -161,7 +161,7 @@ void main() {
       await pumpApp(tester, server);
 
       expect(text('transaction-balance-bank-p1', '국민은행'), findsOneWidget);
-      expect(text('transaction-balance-amount-p1', ' 남은 잔액 \$70.00'), findsOneWidget);
+      expect(text('transaction-balance-amount-p1', ' 남은 잔액 \$70'), findsOneWidget);
       final amount = tester.getBottomLeft(byId('transaction-amount-p1')).dy;
       final balance = tester.getTopLeft(byId('transaction-balance-p1')).dy;
       expect(balance, greaterThanOrEqualTo(amount - 1));
@@ -175,7 +175,7 @@ void main() {
 
       expect(byId('transaction-balance-p1'), findsNothing);
       // The sentence is still there: money moved.
-      expect(byId('transaction-bank-sentence-p1'), findsOneWidget);
+      expect(byId('transaction-bank-line-p1'), findsOneWidget);
     });
 
     testWidgets('a long bank name gets an ellipsis and nothing runs out of a narrow screen', (tester) async {
@@ -200,8 +200,8 @@ void main() {
       final server = serverWith([deposit]);
       await pumpApp(tester, server);
 
-      expect(text('transaction-balance-amount-d1', ' 남은 잔액 \$7.00'), findsOneWidget);
-      expect(text('transaction-bank-move-d1', '입금'), findsOneWidget);
+      expect(text('transaction-balance-amount-d1', ' 남은 잔액 \$7'), findsOneWidget);
+      expect(text('transaction-move-word-d1', '입금'), findsOneWidget);
       // The bank name comes from the server's `myAccount`: the list of accounts is not needed.
       expect(text('transaction-bank-name-d1', '국민은행'), findsOneWidget);
     });
@@ -217,9 +217,9 @@ void main() {
       ]);
       await pumpApp(tester, server);
 
-      expect(text('transaction-amount-in1', '+\$10.00'), findsOneWidget);
-      expect(amountColor(tester, 'in1'), Colors.green.shade700);
-      expect(text('transaction-amount-out1', '-\$20.00'), findsOneWidget);
+      expect(text('transaction-amount-in1', '+\$10'), findsOneWidget);
+      expect(amountColor(tester, 'in1'), Colors.green.shade800);
+      expect(text('transaction-amount-out1', '-\$20'), findsOneWidget);
       expect(amountColor(tester, 'out1'), Colors.red.shade700);
     });
 
@@ -231,8 +231,8 @@ void main() {
       await pumpApp(tester, server);
       final grey = Theme.of(tester.element(byId('transaction-item-q1'))).colorScheme.onSurfaceVariant;
 
-      expect(text('transaction-amount-q1', '-\$7.00'), findsOneWidget);
-      expect(text('transaction-amount-q2', '+\$8.00'), findsOneWidget);
+      expect(text('transaction-amount-q1', '-\$7'), findsOneWidget);
+      expect(text('transaction-amount-q2', '+\$8'), findsOneWidget);
       expect(amountColor(tester, 'q1'), grey);
       expect(amountColor(tester, 'q2'), grey);
     });
@@ -251,8 +251,8 @@ void main() {
 
       await tapId(tester, 'transaction-item-d1');
 
-      expect(text('transaction-amount-d1', '+\$15.00'), findsOneWidget);
-      expect(amountColor(tester, 'd1'), Colors.green.shade700);
+      expect(text('transaction-amount-d1', '+\$15'), findsOneWidget);
+      expect(amountColor(tester, 'd1'), Colors.green.shade800);
     });
   });
 

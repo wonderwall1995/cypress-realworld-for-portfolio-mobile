@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../about/original_project_link.dart';
 import '../../core/api_client.dart';
+import '../../core/error_text.dart';
 import '../../core/session.dart';
 import '../../core/test_id.dart';
 import 'auth_widgets.dart';
@@ -40,6 +41,8 @@ class _SignInPageState extends ConsumerState<SignInPage> {
   }
 
   Future<void> _submit() async {
+    // A second tap (or the keyboard's done key) in the same frame sends nothing.
+    if (_busy) return;
     if (!_formKey.currentState!.validate()) return;
     setState(() {
       _busy = true;
@@ -62,9 +65,9 @@ class _SignInPageState extends ConsumerState<SignInPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Show the start-up connection error until the user tries to sign in.
-    final connectionError = ref.watch(sessionProvider).connectionError;
-    final error = _error ?? (connectionError ? '서버에 연결할 수 없습니다.' : null);
+    // Say why the user is here again, until they try to sign in.
+    final expired = ref.watch(sessionProvider).expired;
+    final error = _error ?? (expired ? sessionExpiredText : null);
 
     return Scaffold(
       body: SafeArea(
@@ -96,13 +99,13 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                       child: TextFormField(
                         controller: _username,
                         decoration: const InputDecoration(
-                          labelText: '아이디',
+                          labelText: '사용자 ID',
                           border: OutlineInputBorder(),
                         ),
                         textInputAction: TextInputAction.next,
                         autocorrect: false,
                         validator: (v) =>
-                            (v == null || v.trim().isEmpty) ? '아이디를 입력하세요.' : null,
+                            (v == null || v.trim().isEmpty) ? '사용자 ID를 입력하세요.' : null,
                       ),
                     ),
                     const SizedBox(height: 16),

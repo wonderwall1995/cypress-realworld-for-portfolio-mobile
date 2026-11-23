@@ -6,7 +6,7 @@ import '../../core/test_id.dart';
 import 'bank_account_form.dart';
 import 'bank_accounts_controller.dart';
 
-/// Add one more bank account (outside the first-time setup).
+/// Add a bank account.
 class BankAccountNewPage extends ConsumerWidget {
   const BankAccountNewPage({super.key});
 
@@ -36,7 +36,8 @@ class BankAccountNewPage extends ConsumerWidget {
                       content: TestId('alert-bar-success', child: Text('은행 계좌를 만들었습니다.')),
                     ),
                   );
-                  router.pop();
+                  // The user may have left while it was on its way.
+                  if (context.mounted) router.pop();
                 },
               ),
             ),

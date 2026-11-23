@@ -8,6 +8,7 @@ import '../../core/session.dart';
 import '../../core/test_id.dart';
 import '../bank_accounts/bank_accounts_controller.dart';
 import '../bank_transfers/bank_transfer.dart';
+import '../money/money_status.dart';
 import '../bank_transfers/deposit_dialog.dart';
 import '../bank_transfers/bank_transfers_controller.dart';
 import '../transactions/transaction.dart';
@@ -20,10 +21,7 @@ class MyAccountPage extends ConsumerWidget {
   const MyAccountPage({super.key});
 
   Future<void> _refresh(WidgetRef ref) async {
-    await Future.wait([
-      ref.read(sessionProvider.notifier).refreshUser(),
-      ref.read(bankTransfersProvider.notifier).refresh(),
-    ]);
+    await ref.read(moneyStatusProvider.notifier).refresh();
   }
 
   @override
@@ -84,7 +82,7 @@ class MyAccountPage extends ConsumerWidget {
                       children: [
                         Expanded(
                           child: TestId(
-                            'my-account-deposit',
+                            'sidenav-deposit',
                             child: FilledButton(
                               onPressed: () => showDepositDialog(context),
                               child: const Text('입금'),
@@ -94,7 +92,7 @@ class MyAccountPage extends ConsumerWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: TestId(
-                            'my-account-transfer',
+                            'sidenav-transfer',
                             child: OutlinedButton(
                               onPressed: () => context.push('/transaction/new'),
                               child: const Text('이체'),
@@ -186,7 +184,7 @@ class _TransferTile extends ConsumerWidget {
         ? '은행 계좌 없음'
         : account?.bankName ?? '삭제된 은행 계좌';
     final sign = transfer.isDeposit ? '+' : '-';
-    final color = transfer.isDeposit ? Colors.green.shade700 : Colors.red.shade700;
+    final color = transfer.isDeposit ? Colors.green.shade800 : Colors.red.shade700;
 
     return TestId(
       'bank-transfer-list-item-${transfer.id}',

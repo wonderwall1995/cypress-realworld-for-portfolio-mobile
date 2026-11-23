@@ -4,13 +4,13 @@ import 'package:go_router/go_router.dart';
 
 import '../features/about/about_page.dart';
 import '../features/account/my_account_page.dart';
+import '../features/auth/offline_page.dart';
 import '../features/auth/signin_page.dart';
 import '../features/auth/signup_page.dart';
 import '../features/auth/splash_page.dart';
 import '../features/bank_accounts/bank_account_new_page.dart';
 import '../features/bank_accounts/bank_accounts_page.dart';
 import '../features/notifications/notifications_page.dart';
-import '../features/onboarding/onboarding_page.dart';
 import '../features/settings/settings_page.dart';
 import '../features/shell/home_shell.dart';
 import '../features/transactions/create/create_transaction_page.dart';
@@ -19,9 +19,9 @@ import '../features/transactions/transactions_page.dart';
 import 'app_gate.dart';
 
 const _splash = '/splash';
+const _offline = '/offline';
 const _signIn = '/signin';
 const _signUp = '/signup';
-const _onboarding = '/onboarding';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final refresh = ValueNotifier<int>(0);
@@ -38,20 +38,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       switch (ref.read(appGateProvider)) {
         case AppGate.checking:
           return at == _splash ? null : _splash;
+        case AppGate.offline:
+          return at == _offline ? null : _offline;
         case AppGate.signedOut:
           return (at == _signIn || at == _signUp) ? null : _signIn;
-        case AppGate.onboarding:
-          return at == _onboarding ? null : _onboarding;
         case AppGate.ready:
-          const authOnly = {_splash, _signIn, _signUp, _onboarding};
+          const authOnly = {_splash, _offline, _signIn, _signUp};
           return authOnly.contains(at) ? '/' : null;
       }
     },
     routes: [
       GoRoute(path: _splash, builder: (_, __) => const SplashPage()),
+      GoRoute(path: _offline, builder: (_, __) => const OfflinePage()),
       GoRoute(path: _signIn, builder: (_, __) => const SignInPage()),
       GoRoute(path: _signUp, builder: (_, __) => const SignUpPage()),
-      GoRoute(path: _onboarding, builder: (_, __) => const OnboardingPage()),
       GoRoute(
         path: '/bankaccounts/new',
         builder: (_, __) => const BankAccountNewPage(),

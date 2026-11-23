@@ -22,6 +22,9 @@ final apiClientProvider = Provider<ApiClient>(
   ),
 );
 
+/// A failed read is not asked again by itself; the screens have a button for it.
+Duration? noRetry(int retryCount, Object error) => null;
+
 /// Opens an address in the phone's browser. Tests replace it with a fake.
 typedef UrlOpener = Future<bool> Function(Uri url);
 

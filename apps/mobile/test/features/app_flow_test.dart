@@ -22,11 +22,20 @@ void main() {
       expect(byId('sidenav-home'), findsNothing);
     });
 
-    testWidgets('server not reachable: tells the user', (tester) async {
-      await pumpApp(tester, serverWithAccount()..down = true);
+    testWidgets('server not reachable: says so, and the saved sign-in works again', (tester) async {
+      final server = serverWithAccount()..down = true;
+      await pumpApp(tester, server);
 
-      expect(byId('signin-error'), findsOneWidget);
+      expect(byId('offline'), findsOneWidget);
       expect(find.text('서버에 연결할 수 없습니다.'), findsOneWidget);
+      expect(byId('signin-submit'), findsNothing); // not signed out
+
+      await tapId(tester, 'offline-retry'); // still down
+      expect(byId('offline'), findsOneWidget);
+
+      server.down = false;
+      await tapId(tester, 'offline-retry');
+      expect(byId('nav-transaction-tabs'), findsOneWidget);
     });
 
     testWidgets('valid session: shows the tabs and moves between them', (tester) async {
@@ -53,7 +62,7 @@ void main() {
 
       await tapId(tester, 'signin-submit');
 
-      expect(find.text('아이디를 입력하세요.'), findsOneWidget);
+      expect(find.text('사용자 ID를 입력하세요.'), findsOneWidget);
       expect(find.text('비밀번호를 입력하세요.'), findsOneWidget);
       expect(server.calls, ['GET /checkAuth']);
     });
@@ -65,7 +74,7 @@ void main() {
       await enter(tester, 'signin-password', 'wrong-pw');
       await tapId(tester, 'signin-submit');
 
-      expect(find.text('아이디 또는 비밀번호가 올바르지 않습니다.'), findsOneWidget);
+      expect(find.text('사용자 ID 또는 비밀번호가 올바르지 않습니다.'), findsOneWidget);
       expect(byId('sidenav-home'), findsNothing);
     });
 
@@ -142,7 +151,7 @@ void main() {
       await tapId(tester, 'signup-submit');
       expect(find.text('이름을 입력하세요.'), findsOneWidget);
       expect(find.text('성을 입력하세요.'), findsOneWidget);
-      expect(find.text('아이디를 입력하세요.'), findsOneWidget);
+      expect(find.text('사용자 ID를 입력하세요.'), findsOneWidget);
       expect(find.text('연락처를 입력하세요.'), findsOneWidget);
 
       await fillValid(tester);
@@ -153,7 +162,31 @@ void main() {
       expect(server.calls, ['GET /checkAuth']);
     });
 
-    testWidgets('the order is 성, 이름, 아이디, 연락처, 비밀번호, 비밀번호 확인', (tester) async {
+    testWidgets('warns about what is public and about the password', (tester) async {
+      await pumpApp(tester, serverWithAccount(signedIn: false), size: const Size(360, 1400));
+      await tapId(tester, 'signup');
+      expect(find.descendant(of: byId('signup-name-notice'), matching: find.textContaining('공개됩니다')), findsOneWidget);
+      expect(find.text('비밀번호는 자신이 쓰던 것을 쓰면 안 됩니다!'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('an ID that is used (the server answers 500): says it may be that', (tester) async {
+      final server = serverWithAccount(signedIn: false)..htmlError.add('POST /users');
+      await pumpApp(tester, server);
+      await tapId(tester, 'signup');
+      await enter(tester, 'signup-last-name', '홍');
+      await enter(tester, 'signup-first-name', '길동');
+      await enter(tester, 'signup-username', 'used');
+      await enter(tester, 'signup-phone-number', '(02) 123-4567');
+      await enter(tester, 'signup-password', 'pw-1234');
+      await enter(tester, 'signup-confirmPassword', 'pw-1234');
+      await tapId(tester, 'signup-submit');
+      expect(find.textContaining('이미 사용 중인 ID일 수 있습니다'), findsOneWidget);
+      expect(find.textContaining('secret'), findsNothing);
+      expect((server.bodies['POST /users'] as Map)['phoneNumber'], '(02) 123-4567');
+    });
+
+    testWidgets('the order is 성, 이름, 사용자 ID, 연락처, 비밀번호, 비밀번호 확인', (tester) async {
       await pumpApp(tester, serverWithAccount(signedIn: false));
       await tapId(tester, 'signup');
 

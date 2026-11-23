@@ -1,24 +1,27 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api_client.dart';
 import '../../../core/providers.dart';
 import '../../../core/session.dart';
-import '../../bank_accounts/bank_accounts_controller.dart';
 import '../../bank_accounts/other_account.dart';
-import '../transaction_feed_controller.dart';
+import '../../money/money_status.dart';
+import '../../settings/privacy.dart';
 import 'user_summary.dart';
 
 /// Users to choose from. [query] is empty for everyone, or a search text.
 final usersProvider =
     FutureProvider.autoDispose.family<List<UserSummary>, String>((ref, query) async {
   final raw = await ref.watch(apiClientProvider).getUsers(query: query);
-  return raw.map(UserSummary.fromJson).toList();
+  return readAnswer(() => raw.map(UserSummary.fromJson).toList());
 });
 
 /// The bank accounts of the user who would receive the money.
 final otherAccountsProvider =
     FutureProvider.autoDispose.family<List<OtherAccount>, String>((ref, userId) async {
   final raw = await ref.watch(apiClientProvider).getAccountsOfUser(userId);
-  return raw.map(OtherAccount.fromJson).toList();
+  return readAnswer(() => raw.map(OtherAccount.fromJson).toList());
 });
 
 enum CreateStep { selectContact, payment, complete }
@@ -80,6 +83,7 @@ class CreateTransactionController extends Notifier<CreateState> {
     final receiver = state.receiver;
     if (receiver == null) return;
 
+    final session = ref.read(apiClientProvider).sessionNumber;
     await ref.read(apiClientProvider).createTransaction(
           transactionType: type,
           receiverId: receiver.id,
@@ -88,10 +92,13 @@ class CreateTransactionController extends Notifier<CreateState> {
           myAccountId: myAccountId,
           otherAccountId: otherAccountId,
           password: password,
-          // The user's own choice in the settings (public when there is none).
+          // The user's own choice in the settings.
           privacyLevel: _privacyLevel(),
         );
 
+    // The user left or signed out while it was on its way. It is done, but there
+    // is no screen to show it on.
+    if (!ref.mounted || session != ref.read(apiClientProvider).sessionNumber) return;
     state = CreateState(
       step: CreateStep.complete,
       receiver: receiver,
@@ -103,15 +110,13 @@ class CreateTransactionController extends Notifier<CreateState> {
       ),
     );
 
-    // The lists, the bank accounts and the balance have changed.
-    ref.invalidate(transactionFeedProvider);
-    await ref.read(bankAccountsProvider.notifier).reload();
-    await ref.read(sessionProvider.notifier).refreshUser();
+    // Approved. Reading the money again is a separate thing: when it fails the
+    // transfer is still done, and only the reading is offered again.
+    unawaited(ref.read(moneyStatusProvider.notifier).refresh(afterWrite: true));
   }
 
   String _privacyLevel() {
-    final saved = ref.read(sessionProvider).user?['defaultPrivacyLevel'];
-    return saved is String && const ['public', 'private'].contains(saved) ? saved : 'public';
+    return privacyOf(ref.read(sessionProvider).user?['defaultPrivacyLevel']);
   }
 }
 

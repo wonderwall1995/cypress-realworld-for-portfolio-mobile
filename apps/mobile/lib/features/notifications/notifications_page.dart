@@ -75,7 +75,10 @@ class NotificationsPage extends ConsumerWidget {
                     itemCount: list.length,
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, i) =>
-                        _NotificationTile(notification: list[i]),
+                        _NotificationTile(
+                          key: ValueKey('row-${list[i].id}'),
+                          notification: list[i],
+                        ),
                   ),
                 ),
         ),
@@ -87,33 +90,50 @@ class NotificationsPage extends ConsumerWidget {
 IconData _iconFor(NotificationKind kind) => switch (kind) {
   NotificationKind.requested => Icons.request_page_outlined,
   NotificationKind.received => Icons.payments_outlined,
-  NotificationKind.like => Icons.favorite_border,
+  NotificationKind.like => Icons.thumb_up_outlined,
   NotificationKind.comment => Icons.chat_bubble_outline,
 };
 
-class _NotificationTile extends ConsumerWidget {
-  const _NotificationTile({required this.notification});
+class _NotificationTile extends ConsumerStatefulWidget {
+  const _NotificationTile({required this.notification, super.key});
 
   final AppNotification notification;
 
-  Future<void> _markRead(BuildContext context, WidgetRef ref) async {
+  @override
+  ConsumerState<_NotificationTile> createState() => _NotificationTileState();
+}
+
+class _NotificationTileState extends ConsumerState<_NotificationTile> {
+  bool _busy = false;
+
+  Future<void> _markRead() async {
+    if (_busy) return;
     final messenger = ScaffoldMessenger.of(context);
+    setState(() => _busy = true);
     try {
-      await ref.read(notificationsProvider.notifier).markRead(notification.id);
+      await ref
+          .read(notificationsProvider.notifier)
+          .markRead(widget.notification.id);
     } on ApiException catch (e) {
+      if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
           content: TestId(
             'alert-bar-error',
-            child: Text(e.isConnection ? '서버에 연결할 수 없습니다.' : '읽음 처리하지 못했습니다.'),
+            child: Text(
+              e.isConnection ? '서버에 연결할 수 없습니다.' : '읽음 처리하지 못했습니다.',
+            ),
           ),
         ),
       );
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final notification = widget.notification;
     return TestId(
       'notification-list-item-${notification.id}',
       child: ListTile(
@@ -123,7 +143,7 @@ class _NotificationTile extends ConsumerWidget {
         trailing: TestId(
           'notification-mark-read-${notification.id}',
           child: TextButton(
-            onPressed: () => _markRead(context, ref),
+            onPressed: _busy ? null : _markRead,
             child: const Text('읽음'),
           ),
         ),

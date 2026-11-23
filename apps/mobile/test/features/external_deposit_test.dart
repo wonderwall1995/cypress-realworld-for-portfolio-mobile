@@ -34,10 +34,8 @@ void main() {
 
     test('it says 입금, not 결제', () {
       final t = Transaction.fromJson(depositItem('d'));
-      expect(t.actionLabel, '입금');
       expect(t.statusLabel, '입금 완료');
-      expect(Transaction.fromJson(testTransaction('p')).actionLabel, '결제');
-      expect(Transaction.fromJson(testTransaction('p')).statusLabel, '결제 완료');
+      expect(Transaction.fromJson(testTransaction('p')).statusLabel, '이체 완료');
     });
   });
 
@@ -50,14 +48,14 @@ void main() {
       // "First Test Ban… 계좌로 입금 되었습니다." — the bank is found by the account of the deposit
       // (the name is 15 characters, so it is cut to 14 and ends with …).
       expect(find.descendant(of: byId('transaction-bank-name-d1'), matching: find.text('First Test Ban…')), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-bank-sentence-d1'), matching: find.text(' 계좌로')), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-bank-move-d1'), matching: find.text('입금')), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-bank-sentence-d1'), matching: find.text(' 되었습니다.')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-bank-line-d1'), matching: find.text(' 계좌로')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-move-word-d1'), matching: find.text('입금')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-bank-line-d1'), matching: find.text(' 되었습니다.')), findsOneWidget);
       // The old receiver name and the 입금 badge are not in this row any more.
       expect(byId('transaction-receiver-d1'), findsNothing);
       expect(byId('transaction-action-d1'), findsNothing);
-      expect(find.descendant(of: byId('transaction-amount-d1'), matching: find.text('+\$7.00')), findsOneWidget);
-      expect(colorOf(tester, 'd1'), Colors.green.shade700);
+      expect(find.descendant(of: byId('transaction-amount-d1'), matching: find.text('+\$7')), findsOneWidget);
+      expect(colorOf(tester, 'd1'), Colors.green.shade800);
       // A bank icon, not the letter 외.
       expect(inRow('d1', find.byIcon(Icons.account_balance)), findsOneWidget);
       expect(inRow('d1', find.text('외')), findsNothing);
@@ -67,8 +65,8 @@ void main() {
       final server = newServer()..everyone.add(depositItem('d1'));
       await pumpApp(tester, server);
 
-      final word = tester.widget<Text>(find.descendant(of: byId('transaction-bank-move-d1'), matching: find.byType(Text)));
-      expect(word.style!.color, Colors.green.shade700);
+      final word = tester.widget<Text>(find.descendant(of: byId('transaction-move-word-d1'), matching: find.byType(Text)));
+      expect(word.style!.color, Colors.green.shade800);
     });
 
     testWidgets('a deposit into an account that is not in the list says only 은행 계좌로', (tester) async {
@@ -77,8 +75,8 @@ void main() {
       await pumpApp(tester, server);
 
       expect(find.descendant(of: byId('transaction-bank-name-d1'), matching: find.text('은행')), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-bank-sentence-d1'), matching: find.text(' 계좌로')), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-bank-move-d1'), matching: find.text('입금')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-bank-line-d1'), matching: find.text(' 계좌로')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-move-word-d1'), matching: find.text('입금')), findsOneWidget);
     });
 
     testWidgets('a payment I made has a letter avatar, a minus sign and red', (tester) async {
@@ -91,7 +89,7 @@ void main() {
 
       expect(inRow('a', find.byIcon(Icons.account_balance)), findsNothing);
       expect(inRow('a', find.text('A')), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-amount-a'), matching: find.text('-\$20.00')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-amount-a'), matching: find.text('-\$20')), findsOneWidget);
       expect(colorOf(tester, 'a'), Colors.red.shade700);
       expect(find.descendant(of: byId('transaction-title-a'), matching: find.textContaining('님에게 이체했습니다')), findsOneWidget);
     });
@@ -100,7 +98,7 @@ void main() {
       final server = newServer()..everyone.add(testTransaction('o', amount: 2000)); // s-o pays r-o
       await pumpApp(tester, server);
 
-      expect(find.descendant(of: byId('transaction-amount-o'), matching: find.text('\$20.00')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-amount-o'), matching: find.text('\$20')), findsOneWidget);
       final theme = Theme.of(tester.element(byId('transaction-item-o')));
       expect(colorOf(tester, 'o'), theme.colorScheme.onSurfaceVariant);
     });
@@ -120,14 +118,14 @@ void main() {
       await pumpApp(tester, server);
 
       await tapId(tester, 'sidenav-my-account');
-      await tapId(tester, 'my-account-deposit');
-      await enter(tester, 'bank-transfer-amount-input', '7');
-      await tapId(tester, 'bank-transfer-submit');
+      await tapId(tester, 'sidenav-deposit');
+      await enter(tester, 'deposit-amount-input', '7');
+      await tapId(tester, 'deposit-submit-button');
 
       await tapId(tester, 'sidenav-home');
       final id = server.everyone.first['id'] as String;
       expect(byId('transaction-item-$id'), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-amount-$id'), matching: find.text('+\$7.00')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-amount-$id'), matching: find.text('+\$7')), findsOneWidget);
 
       await tapId(tester, 'nav-personal-tab');
       expect(byId('transaction-item-$id'), findsOneWidget);
@@ -143,7 +141,7 @@ void main() {
 
       expect(find.descendant(of: byId('transaction-status'), matching: find.text('입금 완료')), findsOneWidget);
       expect(find.descendant(of: byId('transaction-sender-avatar'), matching: find.byIcon(Icons.account_balance)), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-amount-d1'), matching: find.text('+\$12.50')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-amount-d1'), matching: find.text('+\$12.5')), findsOneWidget);
       expect(find.descendant(of: byId('transaction-sender-d1'), matching: find.text('외부 입금')), findsOneWidget);
       // Nothing to accept or reject.
       expect(byId('transaction-accept-request-d1'), findsNothing);
@@ -171,10 +169,10 @@ void main() {
       ])));
 
       Color colorOfWord(String id) =>
-          tester.widget<Text>(find.descendant(of: byId('transaction-bank-move-$id'), matching: find.byType(Text))).style!.color!;
-      expect(find.descendant(of: byId('transaction-bank-move-a'), matching: find.text('입금')), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-bank-move-b'), matching: find.text('출금')), findsOneWidget);
-      expect(colorOfWord('a'), Colors.green.shade700);
+          tester.widget<Text>(find.descendant(of: byId('transaction-move-word-$id'), matching: find.byType(Text))).style!.color!;
+      expect(find.descendant(of: byId('transaction-move-word-a'), matching: find.text('입금')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-move-word-b'), matching: find.text('출금')), findsOneWidget);
+      expect(colorOfWord('a'), Colors.green.shade800);
       expect(colorOfWord('b'), Colors.red.shade700);
     });
 
@@ -192,7 +190,7 @@ void main() {
       expect(find.text('입금'), findsOneWidget);
       expect(find.text(' 되었습니다.'), findsOneWidget);
       // The whole sentence fits in the width it was given.
-      expect(tester.getSize(byId('transaction-bank-sentence-x')).width, lessThanOrEqualTo(260));
+      expect(tester.getSize(byId('transaction-bank-line-x')).width, lessThanOrEqualTo(260));
     });
 
     testWidgets('a short name takes only the room it needs', (tester) async {

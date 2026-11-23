@@ -50,6 +50,8 @@ class _BankAccountFormState extends State<BankAccountForm> {
   }
 
   Future<void> _submit() async {
+    // A second tap (or the keyboard's done key) in the same frame sends nothing.
+    if (_busy) return;
     if (!_formKey.currentState!.validate()) return;
     setState(() {
       _busy = true;
@@ -146,7 +148,7 @@ class _DemoNotice extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return TestId(
-      'bankaccount-demo-notice',
+      'bankaccount-demo-warning',
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(

@@ -31,6 +31,7 @@ Future<void> pumpApp(
 
   await tester.pumpWidget(
     ProviderScope(
+      retry: noRetry,
       overrides: [
         apiClientProvider.overrideWithValue(server.client()),
         liveNotificationsEnabledProvider.overrideWithValue(live),

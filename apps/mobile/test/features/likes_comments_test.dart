@@ -29,7 +29,9 @@ void main() {
       expect(server.calls.where((c) => c == 'POST /likes/t1'), hasLength(1));
       expect(textIn('transaction-like-count-t1', '2'), findsOneWidget);
       expect(tester.widget<IconButton>(find.descendant(of: byId('transaction-like-button-t1'), matching: find.byType(IconButton))).onPressed, isNull);
-      expect(find.byIcon(Icons.favorite), findsOneWidget); // filled heart
+      expect(find.byIcon(Icons.thumb_up_outlined), findsOneWidget); // like the web
+      expect(find.byIcon(Icons.favorite), findsNothing);
+      expect(find.byIcon(Icons.favorite_border), findsNothing);
     });
 
     testWidgets('a transaction I already liked has the button off', (tester) async {
@@ -41,7 +43,7 @@ void main() {
       expect(server.calls, isNot(contains('POST /likes/t1')));
     });
 
-    testWidgets('two quick taps send only one like (the server would accept both)', (tester) async {
+    testWidgets('two quick taps send only one like', (tester) async {
       final server = serverWith([testTransaction('t1')]);
       await pumpApp(tester, server);
       await openDetail(tester, 't1');
@@ -60,7 +62,7 @@ void main() {
 
       await tapId(tester, 'transaction-like-button-t1');
 
-      expect(find.text('좋아요를 누르지 못했습니다.'), findsOneWidget);
+      expect(find.text('응답을 받지 못해 처리 결과를 확인할 수 없습니다.'), findsOneWidget);
       expect(textIn('transaction-like-count-t1', '0'), findsOneWidget);
 
       server.failLike = false;
@@ -161,7 +163,7 @@ void main() {
       await tester.pump();
       await tapId(tester, 'transaction-comment-submit-t1');
 
-      expect(find.text('댓글을 남기지 못했습니다.'), findsOneWidget);
+      expect(find.text('응답을 받지 못해 처리 결과를 확인할 수 없습니다.'), findsOneWidget);
       expect(tester.widget<TextField>(commentField('t1')).controller!.text, 'Keep me');
     });
 

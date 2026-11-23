@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/session.dart';
 import 'bank_account.dart';
@@ -21,15 +24,30 @@ class BankAccountsController extends AsyncNotifier<List<BankAccount>> {
   /// `isDeleted: true`. The app only works with accounts in use, so it hides both.
   Future<List<BankAccount>> _fetch() async {
     final raw = await ref.read(apiClientProvider).getBankAccounts();
-    return raw
-        .where((json) => json['isDeleted'] != true && json['visible'] != false)
-        .map(BankAccount.fromJson)
-        .toList();
+    return readAnswer(
+      () => raw
+          .where((json) => json['isDeleted'] != true && json['visible'] != false)
+          .map(BankAccount.fromJson)
+          .toList(),
+    );
   }
 
   /// Loads again without going through the loading state (the screen stays).
-  Future<void> reload() async {
-    state = await AsyncValue.guard(_fetch);
+  /// Returns false when it failed; the old list stays then, so a failure is never
+  /// shown as "no accounts".
+  Future<bool> reload() async {
+    final api = ref.read(apiClientProvider);
+    final session = api.sessionNumber;
+    try {
+      final list = await _fetch();
+      if (!ref.mounted || session != api.sessionNumber) return false;
+      state = AsyncData(list);
+      return true;
+    } on ApiException catch (e, stack) {
+      if (!ref.mounted || session != api.sessionNumber) return false;
+      if (!state.hasValue) state = AsyncError(e, stack);
+      return false;
+    }
   }
 
   /// Throws [ApiException] when the server refuses.
@@ -37,16 +55,29 @@ class BankAccountsController extends AsyncNotifier<List<BankAccount>> {
     required String bankName,
     required String accountNumber,
   }) async {
-    final json = await ref.read(apiClientProvider).createBankAccount(
-          bankName: bankName,
-          accountNumber: accountNumber,
-        );
-    state = AsyncData([...?state.value, BankAccount.fromJson(json)]);
+    final Map<String, dynamic> json;
+    try {
+      json = await ref.read(apiClientProvider).createBankAccount(
+            bankName: bankName,
+            accountNumber: accountNumber,
+          );
+    } on ApiException {
+      // It may have been done (no answer), or the list here is old (refused).
+      unawaited(reload());
+      rethrow;
+    }
+    final account = readAnswer(() => BankAccount.fromJson(json));
+    state = AsyncData([...?state.value, account]);
   }
 
   /// Throws [ApiException] when the server refuses.
   Future<void> remove(String id) async {
-    await ref.read(apiClientProvider).deleteBankAccount(id);
+    try {
+      await ref.read(apiClientProvider).deleteBankAccount(id);
+    } on ApiException {
+      unawaited(reload());
+      rethrow;
+    }
     state = AsyncData([...?state.value]..removeWhere((a) => a.id == id));
   }
 }
@@ -55,7 +86,11 @@ class BankAccountsController extends AsyncNotifier<List<BankAccount>> {
 /// is nothing to say (it is cleared by the next delete).
 class BankAccountDeleteError extends Notifier<String?> {
   @override
-  String? build() => null;
+  String? build() {
+    // Another user starts without it.
+    ref.watch(sessionProvider.select((s) => s.user?['id']));
+    return null;
+  }
 
   void set(String? message) => state = message;
 }

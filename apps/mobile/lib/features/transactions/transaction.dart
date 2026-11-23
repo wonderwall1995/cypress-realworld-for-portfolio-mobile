@@ -166,33 +166,30 @@ class Transaction {
   bool get isRejectedRequest => requestStatus == 'rejected';
   bool get isPendingRequest => requestStatus == 'pending';
 
-  /// The short word after the names. Same rule as the web:
-  /// payment is "paid", an accepted request is "charged", other requests are "requested".
-  String get actionLabel {
-    if (isExternalDeposit) return '입금';
-    if (isPayment) return '결제';
-    return isAcceptedRequest ? '청구' : '요청';
-  }
-
   /// Where the transaction stands, for the detail screen.
   String get statusLabel {
     if (isExternalDeposit) return status == 'complete' ? '입금 완료' : '처리 중';
-    if (isPayment) return status == 'complete' ? '결제 완료' : '처리 중';
+    if (isPayment) return status == 'complete' ? '이체 완료' : '처리 중';
     if (isAcceptedRequest) return '수락됨';
     if (isRejectedRequest) return '거절됨';
     return '요청 대기 중';
   }
 }
 
-/// Dollars with a thousands separator, for example `$1,234.50`. [cents] is in cents.
+/// Dollars as the web shows them: a thousands separator and no cents when there are
+/// none (`$1,234`). Cents that exist are shown (`$512.5`, `$1,234.56`). [cents] is in
+/// cents.
 String formatUsd(int cents) {
-  final negative = cents < 0;
   final abs = cents.abs();
-  final dollars = (abs ~/ 100).toString();
-  final rest = (abs % 100).toString().padLeft(2, '0');
-  final grouped = dollars.replaceAllMapped(
+  final dollars = (abs ~/ 100).toString().replaceAllMapped(
     RegExp(r'\B(?=(\d{3})+(?!\d))'),
     (_) => ',',
   );
-  return '${negative ? '-' : ''}\$$grouped.$rest';
+  final rest = abs % 100;
+  final decimals = rest == 0
+      ? ''
+      : rest % 10 == 0
+      ? '.${rest ~/ 10}'
+      : '.${rest.toString().padLeft(2, '0')}';
+  return '${cents < 0 ? '-' : ''}\$$dollars$decimals';
 }

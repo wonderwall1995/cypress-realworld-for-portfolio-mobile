@@ -19,7 +19,7 @@ class BankTransfersController extends AsyncNotifier<List<BankTransfer>> {
 
   Future<List<BankTransfer>> _fetch() async {
     final raw = await ref.read(apiClientProvider).getBankTransfers();
-    final list = raw.map(BankTransfer.fromJson).toList();
+    final list = readAnswer(() => raw.map(BankTransfer.fromJson).toList());
     // Newest first. A missing time goes last.
     list.sort((a, b) {
       final ta = a.createdAt, tb = b.createdAt;
@@ -34,10 +34,15 @@ class BankTransfersController extends AsyncNotifier<List<BankTransfer>> {
   /// Loads again without the loading state. Returns false when it failed; the
   /// old list stays then.
   Future<bool> refresh() async {
+    final api = ref.read(apiClientProvider);
+    final session = api.sessionNumber;
     try {
-      state = AsyncData(await _fetch());
+      final list = await _fetch();
+      if (!ref.mounted || session != api.sessionNumber) return false;
+      state = AsyncData(list);
       return true;
     } on ApiException catch (e, stack) {
+      if (!ref.mounted || session != api.sessionNumber) return false;
       if (!state.hasValue) state = AsyncError(e, stack);
       return false;
     }

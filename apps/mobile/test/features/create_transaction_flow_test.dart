@@ -19,7 +19,7 @@ FakeServer newServer() => FakeServer(signedIn: true, accounts: [testAccount('b1'
 /// The 이체 button on the 내 계좌 tab starts a new transaction.
 Future<void> openCreate(WidgetTester tester) async {
   await tapId(tester, 'sidenav-my-account');
-  await tapId(tester, 'my-account-transfer');
+  await tapId(tester, 'sidenav-transfer');
 }
 
 Future<void> fillForm(WidgetTester tester, {String amount = '25', String note = 'Lunch'}) async {
@@ -52,8 +52,8 @@ void main() {
       await pumpApp(tester, newServer());
       await tapId(tester, 'sidenav-my-account');
 
-      expect(find.descendant(of: byId('my-account-transfer'), matching: find.text('이체')), findsOneWidget);
-      await tapId(tester, 'my-account-transfer');
+      expect(find.descendant(of: byId('sidenav-transfer'), matching: find.text('이체')), findsOneWidget);
+      await tapId(tester, 'sidenav-transfer');
 
       expect(byId('transaction-create-steps'), findsOneWidget);
     });
@@ -251,30 +251,31 @@ void main() {
       await payNow(tester);
 
       // The confirm dialog stays open with the reason; no "이체 완료" screen.
-      expect(byId('transfer-confirm-dialog'), findsOneWidget);
-      expect(find.descendant(of: byId('transfer-confirm-error'), matching: find.text('받는 계좌의 잔액 한도를 넘어서 이체할 수 없습니다')), findsOneWidget);
+      expect(byId('transaction-confirm-dialog'), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-confirm-error'), matching: find.text('받는 계좌의 잔액 한도를 넘어서 이체할 수 없습니다')), findsOneWidget);
       expect(find.text('이체 완료'), findsNothing);
       expect(byId('transaction-create-form'), findsOneWidget);
 
       // The user can try again, and the next approval goes through.
       server.createTransactionStatus = null;
-      await tapId(tester, 'transfer-confirm-submit');
+      await tapId(tester, 'transaction-confirm-confirm');
       await tester.pumpAndSettle();
-      expect(byId('transfer-confirm-dialog'), findsNothing);
+      expect(byId('transaction-confirm-dialog'), findsNothing);
       expect(find.text('이체 완료'), findsOneWidget);
     });
 
     testWidgets('a refusal with an unknown reason shows it in brackets; no answer says so', (tester) async {
-      final server = newServer()..createTransactionStatus = 500;
+      final server = newServer()..createTransactionStatus = 400;
       await toStep2(tester, server);
       await fillForm(tester);
       await payNow(tester);
       expect(find.text('이체하지 못했습니다 (refused)'), findsOneWidget);
 
       server.down = true;
-      await tapId(tester, 'transfer-confirm-submit');
+      await tapId(tester, 'transaction-confirm-confirm');
       await tester.pump();
-      expect(find.text('서버에서 처리하지 못했습니다. 잠시 뒤 다시 시도하세요'), findsOneWidget);
+      // The first of the two steps (the password) could not be asked.
+      expect(find.text('비밀번호를 확인하지 못했습니다. 잠시 뒤 다시 시도하세요'), findsOneWidget);
       expect(find.text('이체 완료'), findsNothing);
     });
 
@@ -301,7 +302,7 @@ void main() {
         'privacyLevel': 'public',
       });
       expect(find.text('이체 완료'), findsOneWidget);
-      expect(find.text('Test Bob님에게 \$25.00를 이체했습니다.'), findsOneWidget);
+      expect(find.text('Test Bob님에게 \$25를 이체했습니다.'), findsOneWidget);
       expect(find.text('메모: Lunch'), findsOneWidget);
 
       // The app already knows the new balance, before the 내 계좌 tab is opened.
@@ -313,7 +314,7 @@ void main() {
 
       // The balance is new: $100.00 - $25.00
       await tapId(tester, 'sidenav-my-account');
-      expect(find.descendant(of: byId('sidenav-user-balance'), matching: find.text('\$75.00')), findsOneWidget);
+      expect(find.descendant(of: byId('sidenav-user-balance'), matching: find.text('\$75')), findsOneWidget);
     });
 
     testWidgets('the new transaction shows in the 내 거래 list after returning', (tester) async {
@@ -367,7 +368,7 @@ void main() {
 
       await tapId(tester, 'sidenav-my-account');
 
-      expect(find.descendant(of: byId('sidenav-user-balance'), matching: find.text('\$100.00')), findsOneWidget);
+      expect(find.descendant(of: byId('sidenav-user-balance'), matching: find.text('\$100')), findsOneWidget);
       expect(find.text('내 계좌 잔액'), findsOneWidget);
       expect(find.descendant(of: byId('my-account-full-name'), matching: find.text('Kim Ada')), findsOneWidget);
       expect(find.descendant(of: byId('my-account-username'), matching: find.text('@tester')), findsOneWidget);
@@ -380,7 +381,7 @@ void main() {
       server.balance = 4250; // changed on the server
       await tapId(tester, 'sidenav-my-account');
 
-      expect(find.descendant(of: byId('sidenav-user-balance'), matching: find.text('\$42.50')), findsOneWidget);
+      expect(find.descendant(of: byId('sidenav-user-balance'), matching: find.text('\$42.5')), findsOneWidget);
     });
 
     testWidgets('pulling down on 내 계좌 loads the balance again', (tester) async {

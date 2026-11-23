@@ -83,18 +83,25 @@ void main() {
       // A payment I made: "-" and the "결제" word, amount with a thousands separator.
       expect(find.text('Dinner'), findsOneWidget);
       expect(find.descendant(of: byId('transaction-amount-p1'), matching: find.text('-\$1,234.56')), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-title-p1'), matching: find.text('Alice Test님이 Bob Test님에게 이체했습니다')), findsOneWidget);
+      final title = tester
+          .widgetList<Text>(find.descendant(of: byId('transaction-title-p1'), matching: find.byType(Text)))
+          .map((t) => t.data)
+          .join();
+      expect(title, 'Alice Test님이 Bob Test님에게 이체했습니다');
+      expect(find.descendant(of: byId('transaction-sender-p1'), matching: find.text('Alice Test')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-receiver-p1'), matching: find.text('Bob Test')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-action-p1'), matching: find.text('님에게 이체했습니다')), findsOneWidget);
       final p1 = byId('transaction-item-p1');
       expect(find.descendant(of: p1, matching: find.text('2')), findsOneWidget); // likes
       expect(find.descendant(of: p1, matching: find.text('3')), findsOneWidget); // comments
 
       // A pending request to me: the sign it will have (I will pay: "-"), and "요청".
-      expect(find.descendant(of: byId('transaction-amount-r1'), matching: find.text('-\$7.00')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-amount-r1'), matching: find.text('-\$7')), findsOneWidget);
       expect(find.descendant(of: byId('transaction-title-r1'), matching: find.textContaining('님에게 요청했습니다')), findsOneWidget);
 
       // An accepted request I made: "청구" (the web says "charged"), I was paid: "+".
       expect(find.descendant(of: byId('transaction-title-r2'), matching: find.textContaining('님에게 청구했습니다')), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-amount-r2'), matching: find.text('+\$2.50')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-amount-r2'), matching: find.text('+\$2.5')), findsOneWidget);
     });
 
     testWidgets('an empty list says so', (tester) async {
@@ -238,8 +245,8 @@ void main() {
       expect(byId('transaction-detail-header'), findsOneWidget);
       expect(find.text('거래 상세'), findsOneWidget);
       expect(find.descendant(of: byId('transaction-description'), matching: find.text('Dinner')), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-amount-t1'), matching: find.text('-\$25.00')), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-status'), matching: find.text('결제 완료')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-amount-t1'), matching: find.text('-\$25')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-status'), matching: find.text('이체 완료')), findsOneWidget);
       expect(find.descendant(of: byId('transaction-like-count-t1'), matching: find.text('1')), findsOneWidget);
       expect(find.descendant(of: byId('transaction-comment-count-t1'), matching: find.text('2')), findsOneWidget);
       expect(byId('transaction-sender-avatar'), findsOneWidget);

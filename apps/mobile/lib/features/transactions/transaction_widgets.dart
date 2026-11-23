@@ -86,14 +86,14 @@ class BankMoveSentence extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = Theme.of(context).textTheme.bodyMedium;
     final word = deposit ? '입금' : '출금';
-    final color = deposit ? Colors.green.shade700 : Colors.red.shade700;
+    final color = deposit ? Colors.green.shade800 : Colors.red.shade700;
     final label = bankLabel(bankName, deposit: deposit);
     // The last words of the label ("계좌로", "계좌에서") must stay; only the name is cut.
     final tail = deposit ? ' 계좌로' : ' 계좌에서';
     // The name as the screen says it ("국민 은행"), cut to 14 characters.
     final name = clipBankName(label.substring(0, label.length - tail.length));
     return TestId(
-      'transaction-bank-sentence-$id',
+      'transaction-bank-line-$id',
       // Wrap, not Row: a short line goes on to a second line instead of overflowing.
       child: LayoutBuilder(
         builder: (context, constraints) => Wrap(
@@ -103,13 +103,19 @@ class BankMoveSentence extends StatelessWidget {
               constraints: BoxConstraints(maxWidth: constraints.maxWidth),
               child: TestId(
                 'transaction-bank-name-$id',
-                child: Text(name, style: style, maxLines: 1, overflow: TextOverflow.ellipsis),
+                child: Text(
+                  name,
+                  semanticsLabel: label.substring(0, label.length - tail.length),
+                  style: style,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
             Text(tail, style: style),
             const SizedBox(width: 4),
             TestId(
-              'transaction-bank-move-$id',
+              'transaction-move-word-$id',
               child: Text(word, style: style?.copyWith(color: color, fontWeight: FontWeight.w700)),
             ),
             Text(' 되었습니다.', style: style),
@@ -148,7 +154,13 @@ class BankBalanceText extends StatelessWidget {
               constraints: BoxConstraints(maxWidth: constraints.maxWidth),
               child: TestId(
                 'transaction-balance-bank-$id',
-                child: Text(BankMoveSentence.clipBankName(BankMoveSentence.bankDisplayName(bankName)), style: style, maxLines: 1, overflow: TextOverflow.ellipsis),
+                child: Text(
+                  BankMoveSentence.clipBankName(BankMoveSentence.bankDisplayName(bankName)),
+                  semanticsLabel: BankMoveSentence.bankDisplayName(bankName),
+                  style: style,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
             TestId(
@@ -170,21 +182,32 @@ class TransactionTitleLine extends StatelessWidget {
 
   final Transaction transaction;
 
-  /// The sentence, for tests and for the screen.
-  static String sentence(Transaction t) {
-    if (t.isExternalDeposit) return t.senderName;
+  /// The last words of the sentence.
+  static String action(Transaction t) {
     final verb = t.isPayment ? '이체' : (t.isAcceptedRequest ? '청구' : '요청');
-    return '${t.senderName}님이 ${t.receiverName}님에게 $verb했습니다';
+    return '님에게 $verb했습니다';
   }
 
   @override
   Widget build(BuildContext context) {
     final style = Theme.of(context).textTheme.titleMedium;
     final id = transaction.id;
+    // The whole names, never shortened by the app; a very long one ends with …
+    Widget name(String part, String text) => TestId(
+          'transaction-$part-$id',
+          child: Text(text, style: style, maxLines: 2, overflow: TextOverflow.ellipsis),
+        );
+    if (transaction.isExternalDeposit) return name('sender', transaction.senderName);
     return TestId(
-      transaction.isExternalDeposit ? 'transaction-sender-$id' : 'transaction-title-$id',
-      // The whole names, never shortened by the app; a very long sentence ends with …
-      child: Text(sentence(transaction), style: style, maxLines: 3, overflow: TextOverflow.ellipsis),
+      'transaction-title-$id',
+      child: Wrap(
+        children: [
+          name('sender', transaction.senderName),
+          Text('님이 ', style: style),
+          name('receiver', transaction.receiverName),
+          TestId('transaction-action-$id', child: Text(action(transaction), style: style)),
+        ],
+      ),
     );
   }
 }
@@ -210,7 +233,7 @@ class TransactionAmountText extends ConsumerWidget {
     final color = received == null || !transaction.moneyMoved
         ? theme.colorScheme.onSurfaceVariant
         : received
-            ? Colors.green.shade700
+            ? Colors.green.shade800
             : Colors.red.shade700;
     final sign = received == null ? '' : (received ? '+' : '-');
     return TestId(
