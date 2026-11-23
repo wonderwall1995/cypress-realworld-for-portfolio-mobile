@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
-import 'core/api_client.dart';
 import 'core/config.dart';
 import 'core/providers.dart';
+import 'core/secure_cookie_storage.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,7 +17,7 @@ Future<void> main() async {
     return;
   }
 
-  final cookieJar = await createPersistentCookieJar();
+  final cookieJar = await createPersistentCookieJar(config.apiBaseUrl);
   runApp(
     ProviderScope(
       retry: noRetry,

@@ -1,10 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
-import 'package:path_provider/path_provider.dart';
 
 /// How a request failed. What the user may do next depends on it.
 enum ApiFailure {
@@ -620,18 +618,6 @@ class ApiClient {
       await cookieJar.deleteAll();
     }
   }
-}
-
-/// Cookie storage that follows the web rule for "Remember me".
-///
-/// A cookie with an expiry date (Remember me checked, 30 days) is saved to
-/// disk. A session cookie (no expiry) stays in memory and is lost on restart.
-Future<CookieJar> createPersistentCookieJar() async {
-  final dir = await getApplicationSupportDirectory();
-  return PersistCookieJar(
-    persistSession: false,
-    storage: FileStorage('${dir.path}${Platform.pathSeparator}cookies'),
-  );
 }
 
 /// One event of a Server-Sent Events stream.
