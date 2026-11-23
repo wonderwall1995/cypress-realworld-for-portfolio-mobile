@@ -24,15 +24,19 @@ final livePollIntervalProvider = Provider<Duration>(
 );
 
 /// After this many failed connections in a row the app asks every
-/// [livePollIntervalProvider] instead, until it is in view again.
+/// [livePollIntervalProvider] instead.
 const liveMaxFailures = 3;
+
+/// After this many answered polls the stream is tried again (6 x 10 seconds).
+const livePollsBeforeRetry = 6;
 
 /// Keeps the notifications fresh while the app is in view, and only then.
 ///
 /// It opens the server's stream (`GET /notifications/stream`). Each time it is
 /// connected, the list is read once to catch up (nothing is replayed), and every
 /// event adds a notification at once. When the stream keeps failing it asks for
-/// the list every 10 seconds instead. When the app goes to the background, both
+/// the list every 10 seconds instead, and while that works it tries the stream again
+/// once a minute (the server may have been started again). When the app goes to the background, both
 /// stop; when it comes back they start again, and the money is read once: it can
 /// have changed without an unread notification (a deposit on another device, or a
 /// notification that was read on the web). When the sign-in is over, everything
@@ -142,10 +146,16 @@ class _NotificationLiveSyncState extends ConsumerState<NotificationLiveSync>
   }
 
   void _poll(int generation) {
-    void tick() {
-      if (_current(generation)) {
-        ref.read(notificationsProvider.notifier).refresh();
-      }
+    var answered = 0;
+    Future<void> tick() async {
+      if (!_current(generation)) return;
+      final ok = await ref.read(notificationsProvider.notifier).refresh();
+      if (!ok || !_current(generation)) return;
+      if (++answered <= livePollsBeforeRetry) return;
+      // One more failure, and it polls again.
+      _timer?.cancel();
+      _failures = liveMaxFailures - 1;
+      unawaited(_connect(generation));
     }
 
     tick();

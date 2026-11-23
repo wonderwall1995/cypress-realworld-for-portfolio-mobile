@@ -97,6 +97,46 @@ void main() {
     });
   });
 
+  group('while the server is started again', () {
+    testWidgets('using the app does not sign out, and goes on afterwards', (tester) async {
+      final server = newServer();
+      await pumpApp(tester, server);
+      server.restarting = true;
+      await tapId(tester, 'sidenav-bankaccounts');
+      await tapId(tester, 'sidenav-my-account');
+      await tapId(tester, 'sidenav-notifications');
+      expect(byId('signin-submit'), findsNothing);
+      expect(byId('sidenav-home'), findsOneWidget);
+
+      server.restarting = false;
+      await tapId(tester, 'sidenav-bankaccounts');
+      expect(find.text('First Bank'), findsOneWidget);
+    });
+
+    testWidgets('opening the app offers to ask again; the saved sign-in is kept', (tester) async {
+      final server = newServer()..restarting = true;
+      await pumpApp(tester, server);
+      expect(byId('offline'), findsOneWidget);
+      expect(byId('signin-submit'), findsNothing);
+
+      server.restarting = false;
+      await tapId(tester, 'offline-retry');
+      expect(byId('nav-transaction-tabs'), findsOneWidget);
+    });
+
+    testWidgets('a transfer in that moment is of unknown result, not failed', (tester) async {
+      final server = newServer();
+      await pumpApp(tester, server);
+      await tapId(tester, 'sidenav-my-account');
+      await tapId(tester, 'sidenav-deposit');
+      await enter(tester, 'deposit-amount-input', '5');
+      server.restarting = true;
+      await tapId(tester, 'deposit-submit-button');
+      expect(find.text('응답을 받지 못해 처리 결과를 확인할 수 없습니다.'), findsOneWidget);
+      expect(find.textContaining('502'), findsNothing);
+    });
+  });
+
   testWidgets('a late answer for user A does not show up for user B', (tester) async {
     final server = newServer();
     await pumpApp(tester, server);

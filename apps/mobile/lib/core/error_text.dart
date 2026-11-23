@@ -28,11 +28,8 @@ const connectionFailedText = '서버에 연결할 수 없어 처리하지 못했
 /// not say that it failed, and must not send it again by itself.
 const resultUnknownText = '응답을 받지 못해 처리 결과를 확인할 수 없습니다.';
 
-/// 429 from the proxy in front of the server (sign-in and sign-up, an HTML page).
+/// 429, for example from the proxy in front of the server (sign-in and sign-up).
 const tooManyRequestsText = '요청이 많습니다. 잠시 뒤 다시 시도하세요';
-
-/// 429 from the server: the password was wrong too often (the same sentence as the web).
-const tooManyPasswordsText = '비밀번호를 여러 번 틀렸습니다. 10분 뒤에 다시 시도하세요';
 
 /// 409 at sign-up (the same sentence as the web).
 const usernameTakenText = '이미 사용 중인 사용자 ID입니다';
@@ -58,7 +55,6 @@ const _table = <MapEntry<String, String>>[
   MapEntry('receiving bank account balance would be too large', '받는 계좌의 잔액 한도를 넘어서 이체할 수 없습니다'),
   MapEntry('balance would be too large', '받는 계좌의 잔액 한도를 넘어서 이체할 수 없습니다'),
   MapEntry('password is not correct', '비밀번호가 맞지 않습니다'),
-  MapEntry('too many wrong passwords', tooManyPasswordsText),
   MapEntry('cannot be deleted', '잔액이 있는 계좌는 삭제할 수 없습니다'),
   MapEntry('accountNumber must be', '계좌 번호는 숫자 9~12자리여야 합니다'),
   MapEntry('bankName is required', '은행 이름을 입력하세요'),

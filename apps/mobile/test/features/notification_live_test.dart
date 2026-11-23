@@ -204,6 +204,45 @@ void main() {
       expect(calls(server, 'GET /notifications/stream'), 3); // no more tries
     });
 
+    testWidgets('once the server answers again, the stream is tried again after a minute', (tester) async {
+      final server = newServer()..restarting = false;
+      await pumpApp(tester, server, live: true);
+      await settle(tester);
+
+      // Down for a good while: three failures, then polling.
+      server.restarting = true;
+      server.closeStreams();
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(seconds: 5));
+      await settle(tester);
+      final tries = calls(server, 'GET /notifications/stream');
+      expect(server.streams, isEmpty);
+
+      // While it is down the stream is not tried (only answered polls count).
+      for (var i = 0; i < 15; i++) {
+        await tester.pump(const Duration(seconds: 10));
+        await settle(tester);
+      }
+      expect(calls(server, 'GET /notifications/stream'), tries);
+      server.restarting = false;
+      await tester.pump(const Duration(seconds: 40));
+      await settle(tester);
+      expect(calls(server, 'GET /notifications/stream'), tries);
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(seconds: 10));
+        await settle(tester);
+      }
+      expect(server.streams, hasLength(1));
+
+      // Live again: at once, and no polling any more.
+      server.push(testNotification('n1', 'like'));
+      await settle(tester);
+      expect(badge('1'), findsOneWidget);
+      final reads = calls(server, 'GET /notifications');
+      await tester.pump(const Duration(seconds: 60));
+      expect(calls(server, 'GET /notifications'), reads);
+    });
+
     testWidgets('a notification found by that polling is shown', (tester) async {
       final server = newServer()..streamStatus = 404;
       await pumpApp(tester, server, live: true);

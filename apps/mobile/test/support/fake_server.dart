@@ -301,21 +301,8 @@ class FakeServer {
   /// User names that are used (409 at sign-up).
   final Set<String> takenUsernames = {};
 
-  /// How often the password was wrong. After 10 the server answers 429 (also for the
-  /// right one), at the check and at the transfer.
-  int wrongPasswords = 0;
-
-  ResponseBody? _passwordRefusal(Object? given) {
-    if (wrongPasswords >= 10) {
-      return jsonBody(429, {'error': 'too many wrong passwords, try again later'});
-    }
-    if (given == password) {
-      wrongPasswords = 0;
-      return null;
-    }
-    wrongPasswords++;
-    return jsonBody(403, {'error': 'the password is not correct'});
-  }
+  /// The server is being started again: the proxy answers everything with a 502 page.
+  bool restarting = false;
 
   /// The server forgot the session (a restart, for example): every protected
   /// request answers 401.
@@ -342,6 +329,11 @@ class FakeServer {
     }
     if (htmlError.contains(key)) {
       return ResponseBody.fromString('<html>Error: secret stack</html>', 500, headers: {
+        Headers.contentTypeHeader: ['text/html'],
+      });
+    }
+    if (restarting) {
+      return ResponseBody.fromString('<html><h1>502 Bad Gateway</h1></html>', 502, headers: {
         Headers.contentTypeHeader: ['text/html'],
       });
     }
@@ -415,8 +407,7 @@ class FakeServer {
         final myAccount = mineFound.first;
         final cents = (body['amount'] as int) * 100;
         if (!isRequest) {
-          final refusal = _passwordRefusal(body['password']);
-          if (refusal != null) return refusal;
+          if (body['password'] != password) return jsonBody(403, {'error': 'the password is not correct'});
           if (body['otherAccountId'] is! String) {
             return jsonBody(422, {
               'errors': [
@@ -448,8 +439,9 @@ class FakeServer {
         if (!isRequest) balance -= created['amount'] as int;
         return jsonBody(200, {'transaction': created});
       case 'POST /users/verifyPassword':
-        return _passwordRefusal((o.data as Map<String, dynamic>)['password']) ??
-            ResponseBody.fromString('', 204);
+        return (o.data as Map<String, dynamic>)['password'] == password
+            ? ResponseBody.fromString('', 204)
+            : jsonBody(403, {'error': 'the password is not correct'});
       case 'POST /logout':
         signedIn = false;
         return ResponseBody.fromString('', 302);
