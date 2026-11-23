@@ -118,7 +118,9 @@ class BankMoveSentence extends StatelessWidget {
               'transaction-move-word-$id',
               child: Text(word, style: style?.copyWith(color: color, fontWeight: FontWeight.w700)),
             ),
-            Text(' 되었습니다.', style: style),
+            // The gap stays at the end of the line above when the words go to the next one.
+            const SizedBox(width: 4),
+            Text('되었습니다.', style: style),
           ],
         ),
       ),

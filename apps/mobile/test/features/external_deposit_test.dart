@@ -50,7 +50,7 @@ void main() {
       expect(find.descendant(of: byId('transaction-bank-name-d1'), matching: find.text('First Test Ban…')), findsOneWidget);
       expect(find.descendant(of: byId('transaction-bank-line-d1'), matching: find.text(' 계좌로')), findsOneWidget);
       expect(find.descendant(of: byId('transaction-move-word-d1'), matching: find.text('입금')), findsOneWidget);
-      expect(find.descendant(of: byId('transaction-bank-line-d1'), matching: find.text(' 되었습니다.')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-bank-line-d1'), matching: find.text('되었습니다.')), findsOneWidget);
       // The old receiver name and the 입금 badge are not in this row any more.
       expect(byId('transaction-receiver-d1'), findsNothing);
       expect(byId('transaction-action-d1'), findsNothing);
@@ -188,7 +188,7 @@ void main() {
       expect(name.maxLines, 1);
       expect(find.text(' 계좌로'), findsOneWidget);
       expect(find.text('입금'), findsOneWidget);
-      expect(find.text(' 되었습니다.'), findsOneWidget);
+      expect(find.text('되었습니다.'), findsOneWidget);
       // The whole sentence fits in the width it was given.
       expect(tester.getSize(byId('transaction-bank-line-x')).width, lessThanOrEqualTo(260));
     });

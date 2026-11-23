@@ -90,7 +90,7 @@ void main() {
       expect(find.descendant(of: byId('transaction-bank-line-p1'), matching: find.text(' 계좌에서')), findsOneWidget);
       expect(text('transaction-move-word-p1', '출금'), findsOneWidget);
       expect(wordColor(tester, 'p1'), Colors.red.shade700);
-      expect(find.descendant(of: byId('transaction-bank-line-p1'), matching: find.text(' 되었습니다.')), findsOneWidget);
+      expect(find.descendant(of: byId('transaction-bank-line-p1'), matching: find.text('되었습니다.')), findsOneWidget);
     });
 
     testWidgets('a payment I received says 계좌로 입금 되었습니다 with 입금 in green', (tester) async {
@@ -281,5 +281,15 @@ void main() {
     expect(find.text('가나다라마바사아자차카타파하…'), findsNWidgets(2)); // the sentence and the balance line
     expect(BankMoveSentence.clipBankName('가나다라마바사아자차카타파하'), '가나다라마바사아자차카타파하'); // 14: kept
     expect(BankMoveSentence.clipBankName('가나다라마바사아자차카타파하갸'), '가나다라마바사아자차카타파하…');
+  });
+
+  testWidgets('when the words go to a second line, it starts at the left edge', (tester) async {
+    final server = serverWith([item('p1', myAccount: account('국민', 7000))]);
+    await pumpApp(tester, server, size: const Size(420, 900));
+
+    final line = byId('transaction-bank-line-p1');
+    final words = find.descendant(of: line, matching: find.text('되었습니다.'));
+    expect(tester.getTopLeft(words).dy, greaterThan(tester.getTopLeft(byId('transaction-bank-name-p1')).dy));
+    expect(tester.getTopLeft(words).dx, tester.getTopLeft(line).dx);
   });
 }
