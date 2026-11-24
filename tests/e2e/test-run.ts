@@ -8,6 +8,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { keptOutcomes, sendOutcome } from "./fixture/run-results";
+import { appSourceFingerprint, runCode } from "./run-code";
 
 const HERE = import.meta.dirname;
 const ROOT = join(HERE, "..", "..");
@@ -57,11 +58,21 @@ for (const [command, ...args] of [
 mkdirSync(join(HERE, "logs"), { recursive: true });
 rmSync(RESULTS_FILE, { force: true });
 
+// 어떤 코드로 도는지 서버에 알린다 (서버가 버전을 매긴다). 앱의 버전은 기기에 깔린 앱의 것이다
+const running = runCode();
+if (!running.target) console.log("깔린 앱의 버전을 알 수 없습니다 (pnpm build 로 만든 앱이 아닙니다). 빈칸으로 기록합니다.");
+else if (running.target !== appSourceFingerprint()) console.log("깔린 앱이 지금의 앱 소스로 만든 것이 아닙니다. 깔린 앱의 버전으로 기록합니다.");
+
 // 번호를 열거나 합류한다
-const started = await ask("", { platform: "app", device: "android-emulator" });
+const started = await ask("", { platform: "app", device: "android-emulator", code: running });
 if (!started || ![200, 201].includes(started.status)) stop(`번호를 받지 못했습니다 (${started?.status ?? "연결 안 됨"}).`);
-const run: { runNo: number; opened: boolean; fixtures: Record<string, Record<string, string>> } = await started!.json();
-console.log(`실행 번호 ${run.runNo} (${run.opened ? "새로 열었음" : "합류했음"})`);
+const run: {
+  runNo: number;
+  opened: boolean;
+  versions: { server: string; target: string | null };
+  fixtures: Record<string, Record<string, string>>;
+} = await started!.json();
+console.log(`실행 번호 ${run.runNo} (${run.opened ? "새로 열었음" : "합류했음"}), 서버 ${run.versions.server}, 앱 ${run.versions.target ?? "모름"}`);
 
 const tell = async (event: "finish" | "block") => {
   const answer = await ask(`/${run.runNo}/${event}`, { platform: "app" });
