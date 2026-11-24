@@ -2,11 +2,12 @@
 // 웹의 starter.spec.ts, finisher.spec.ts, test-run-reporter.ts 의 자리다. 규칙은 웹 저장소의 docs/fixture-prisma-guide.md 를 따른다.
 // - 전체만 돌린다. 일부만 돌리려면 pnpm test --spec 003 을 쓴다 (번호를 받지 않는다).
 // - 실패한 시험이 있어도 끝까지 돌았으면 finish 다. 중간에 멈추면 block 이다 (그 번호는 무효가 된다).
-// - 신호는 시험이 하나 끝날 때마다 wdio.conf.ts 가 보낸다 (10분 동안 없으면 서버가 block 으로 바꾼다).
+// - 결과는 시험이 하나 끝날 때마다 wdio.conf.ts 가 보낸다 (신호를 겸한다. 10분 동안 없으면 서버가 block 으로 바꾼다).
+// - 끝나기 직전에 결과를 모두 한 번 더 보낸다. 하나라도 저장되지 않으면 finish 대신 block 이다 (빠진 결과는 믿을 수 없다).
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { keptOutcomes, sendOutcome } from "./fixture/run-results";
 
 const HERE = import.meta.dirname;
 const ROOT = join(HERE, "..", "..");
@@ -14,7 +15,7 @@ if (existsSync(join(HERE, ".env"))) process.loadEnvFile(join(HERE, ".env"));
 
 const SERVER = process.env.TEST_RUN_SERVER ?? process.env.E2E_API_URL ?? "http://127.0.0.1:7202";
 const SECRET = process.env.TEST_RUN_SECRET ?? "";
-const DONE_FILE = join(tmpdir(), `e2e-run-${process.pid}.txt`); // 끝난 시험을 한 줄씩 적는 곳
+const RESULTS_FILE = join(HERE, "logs", "test-run-results.jsonl"); // 끝난 시험의 결과를 한 줄씩 적는 곳. 커밋하지 않는다
 
 const stop = (message: string): never => {
   console.error(`\n정식 실행을 시작하지 않았습니다: ${message}\n`);
@@ -52,6 +53,10 @@ for (const [command, ...args] of [
   if (spawnSync(command, args, { cwd: ROOT, stdio: "inherit", shell: command === "npx" }).status !== 0) process.exit(1);
 }
 
+// 앞선 실행의 결과가 이 번호에 섞이면 안 된다
+mkdirSync(join(HERE, "logs"), { recursive: true });
+rmSync(RESULTS_FILE, { force: true });
+
 // 번호를 열거나 합류한다
 const started = await ask("", { platform: "app", device: "android-emulator" });
 if (!started || ![200, 201].includes(started.status)) stop(`번호를 받지 못했습니다 (${started?.status ?? "연결 안 됨"}).`);
@@ -81,7 +86,7 @@ const child = spawn("npx", ["wdio", "run", "wdio.conf.ts"], {
     TEST_RUN_FIXTURES: JSON.stringify(run.fixtures),
     TEST_RUN_NO: String(run.runNo),
     TEST_RUN_SERVER: SERVER,
-    TEST_RUN_DONE_FILE: DONE_FILE,
+    TEST_RUN_RESULTS_FILE: RESULTS_FILE,
   },
 });
 let stopped = false;
@@ -93,8 +98,14 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 }
 const code = await new Promise<number>((resolve) => child.on("close", (value) => resolve(value ?? 1)));
 
-// 시험이 모두 끝까지 돌았는가 (실패도 끝까지 돈 것이다)
-const done = existsSync(DONE_FILE) ? readFileSync(DONE_FILE, "utf8").trim().split("\n").length : 0;
-rmSync(DONE_FILE, { force: true });
-await tell(!stopped && done === specs.length ? "finish" : "block");
-process.exitCode = code;
+// 시험이 모두 끝까지 돌았고(실패도 끝까지 돈 것이다), 결과가 모두 저장됐는가
+const outcomes = keptOutcomes(RESULTS_FILE);
+let missing = 0;
+for (const outcome of outcomes) {
+  if (!(await sendOutcome(SERVER, run.runNo, outcome))) missing += 1;
+}
+console.log(`결과 ${outcomes.length}개 가운데 저장된 것 ${outcomes.length - missing}개`);
+const labelsDone = new Set(outcomes.map((outcome) => outcome.testCase));
+const complete = !stopped && missing === 0 && labels.every((label) => labelsDone.has(label));
+await tell(complete ? "finish" : "block");
+process.exitCode = complete ? code : code || 1;

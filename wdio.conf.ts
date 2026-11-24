@@ -1,8 +1,9 @@
-import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { browser } from "@wdio/globals";
 import { closeDb } from "./tests/e2e/db/client";
-import { takeStepRecords } from "./tests/e2e/fixture/step";
+import { keepOutcome, outcomeOf, sendOutcome } from "./tests/e2e/fixture/run-results";
+import { StepRecord, takeStepRecords } from "./tests/e2e/fixture/step";
 
 const E2E = join(__dirname, "tests", "e2e");
 
@@ -16,25 +17,40 @@ process.env.JAVA_HOME ??= "C:/Program Files/Android/Android Studio/jbr";
 const PKG = "io.github.wonderwall1995.cypress_realworld_for_personal_portfolio_mobile";
 const LOGS = join(E2E, "logs"); // 실패했을 때의 화면. 커밋하지 않는다
 
-const printSteps = () => {
-  for (const item of takeStepRecords()) {
+const takeSteps = () => {
+  const steps = takeStepRecords();
+  for (const item of steps) {
     console.log(
       `${"  ".repeat(item.depth)}[${item.kind}] ${item.name} ${item.status} ${item.durationMs}ms`
     );
   }
+  return steps;
 };
 
-// 정식 실행(test-run.ts)이면 시험이 하나 끝날 때마다 번호 서버에 살아 있다고 알린다. 알리지 못해도 시험은 계속한다
-const tellAlive = async (title: string) => {
-  const { TEST_RUN_NO, TEST_RUN_SERVER, TEST_RUN_SECRET, TEST_RUN_DONE_FILE } = process.env;
-  if (!TEST_RUN_NO || !TEST_RUN_DONE_FILE) return;
-  appendFileSync(TEST_RUN_DONE_FILE, `${title}\n`);
-  await fetch(`${TEST_RUN_SERVER}/api/testRuns/${TEST_RUN_NO}/signal`, {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${TEST_RUN_SECRET ?? ""}` },
-    body: JSON.stringify({ platform: "app" }),
-    signal: AbortSignal.timeout(10_000),
-  }).catch(() => undefined);
+// 정식 실행(test-run.ts)의 기록. 시험이 끝나도 정리(afterEach)의 도구까지 모은 뒤에 보낸다
+let startedAt = 0;
+let ended: { test: TestInfo; result: TestEnd; steps: StepRecord[] } | undefined;
+interface TestInfo {
+  title: string;
+  file: string;
+}
+interface TestEnd {
+  passed: boolean;
+  error?: { message?: string };
+  duration: number;
+}
+
+// 파일에 먼저 적고 보낸다. 보내지 못해도 시험은 계속한다 (test-run.ts 가 끝에 한 번 더 보낸다). 보내는 것이 살아 있다는 신호도 된다
+const recordEnded = async () => {
+  if (!ended) return;
+  const { test, result, steps } = ended;
+  ended = undefined;
+  const { TEST_RUN_NO, TEST_RUN_SERVER, TEST_RUN_RESULTS_FILE } = process.env;
+  if (!TEST_RUN_NO || !TEST_RUN_SERVER || !TEST_RUN_RESULTS_FILE) return; // 번호 없는 실행
+  const outcome = outcomeOf(test, { ...result, startedAt, durationMs: result.duration }, steps);
+  if (!outcome) return;
+  keepOutcome(TEST_RUN_RESULTS_FILE, outcome);
+  await sendOutcome(TEST_RUN_SERVER, TEST_RUN_NO, outcome);
 };
 
 export const config = {
@@ -61,13 +77,12 @@ export const config = {
     },
   ],
 
-  afterTest: async (
-    test: { title: string },
-    _context: unknown,
-    result: { passed: boolean }
-  ) => {
-    printSteps();
-    await tellAlive(test.title);
+  beforeTest: () => {
+    startedAt = Date.now();
+  },
+
+  afterTest: async (test: TestInfo, _context: unknown, result: TestEnd) => {
+    ended = { test, result, steps: takeSteps() };
     if (result.passed) return;
     mkdirSync(LOGS, { recursive: true });
     const name = join(LOGS, `${Date.now()}-${test.title.slice(0, 20).replace(/[^0-9A-Za-z가-힣]/g, "_")}`);
@@ -75,8 +90,16 @@ export const config = {
     writeFileSync(`${name}.xml`, await browser.getPageSource());
   },
 
-  // 정리(afterEach)에서 부른 도구. 다음 테스트의 기록에 섞이지 않게 여기서 꺼낸다
-  afterHook: () => printSteps(),
+  // 정리(afterEach)에서 부른 도구도 그 시험의 것이다
+  afterHook: async () => {
+    const steps = takeSteps();
+    if (!ended) return;
+    ended.steps.push(...steps);
+    await recordEnded();
+  },
 
-  after: () => closeDb(),
+  after: async () => {
+    await recordEnded(); // 정리가 없는 시험
+    await closeDb();
+  },
 };
