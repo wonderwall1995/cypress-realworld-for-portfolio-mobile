@@ -8,5 +8,5 @@
     "skipLibCheck": true,
     "types": ["node", "@wdio/globals/types", "@wdio/mocha-framework", "expect-webdriverio"]
   },
-  "include": ["**/*.ts", "../../wdio.conf.ts"]
+  "include": ["**/*.ts", "../../wdio.conf.ts", "../../tools/*.mts"]
 }

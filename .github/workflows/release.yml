@@ -1,0 +1,120 @@
+# main에 병합되거나 push됐을 때, package.json의 version이 마지막 릴리스보다 높으면 APK를 만들어 시험판으로 공개한다.
+# 버전이 오르지 않았으면 decide에서 끝난다. 방법과 준비: docs/release/github-release-apk.md 0절
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency: # 한 번에 하나씩. 앞의 공개가 끝나야 다음이 버전을 본다
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  decide:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      release: ${{ steps.decide.outputs.release }}
+      version: ${{ steps.decide.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - id: decide
+        run: node tools/release.mts decide
+
+  build:
+    needs: decide
+    if: needs.decide.outputs.release == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: release # 서명 키는 여기에만 있고, main에서만 읽힌다
+    permissions:
+      contents: read # 릴리스를 쓸 수 없다
+    env:
+      FLUTTER_ARCHIVE: flutter_linux_3.35.6-stable.tar.xz # 개발에 쓰는 버전과 같다
+      FLUTTER_SHA256: 87493b72916f12054176c2a8bbf9547fe63cb5754bdddfe300219d9b57e626af
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Flutter (공식 파일을 받아 해시를 확인한다)
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSLO --retry 3 "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/$FLUTTER_ARCHIVE"
+          echo "$FLUTTER_SHA256  $FLUTTER_ARCHIVE" | sha256sum --check
+          tar -xf "$FLUTTER_ARCHIVE"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+      - name: 검사와 테스트 (서명 키를 쓰기 전에)
+        working-directory: apps/mobile
+        run: |
+          flutter pub get --enforce-lockfile
+          flutter analyze
+          flutter test
+      - name: 서명 키
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE" ] || [ -z "$PASSWORD" ]; then
+            echo "release 환경에 서명 키가 없습니다. 내 PC에서 pnpm release:secrets 를 한 번 하세요."
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          {
+            printf 'storeFile=%s\n' "$RUNNER_TEMP/release.jks"
+            printf 'storePassword=%s\n' "$PASSWORD"
+            printf 'keyAlias=release\n'
+            printf 'keyPassword=%s\n' "$PASSWORD"
+          } > apps/mobile/android/key.properties
+      - name: 만들고 확인
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
+        run: node tools/release.mts build
+      - name: 서명 키 지우기
+        if: always()
+        run: rm -f apps/mobile/android/key.properties "$RUNNER_TEMP/release.jks"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: apps/mobile/build/release-${{ needs.decide.outputs.version }}
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: [decide, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write # 릴리스를 쓴다. 서명 키는 읽을 수 없다
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: apps/mobile/build/release-${{ needs.decide.outputs.version }}
+      - name: 시험판으로 공개
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/release.mts publish
