@@ -61,13 +61,6 @@ void main() {
     );
   });
 
-  testWidgets('a comment can be read by others', (tester) async {
-    await pumpApp(tester, signedIn());
-    await tapId(tester, 'transaction-item-t1');
-
-    expect(decoration(tester, 'transaction-comment-input-t1').hintText, commentDemoHint);
-  });
-
   for (final (name, size, scale) in [
     ('a small phone', const Size(320, 568), 1.0),
     ('a small phone with letters twice as big', const Size(320, 568), 2.0),

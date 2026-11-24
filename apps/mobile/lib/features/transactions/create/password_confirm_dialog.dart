@@ -20,7 +20,8 @@ enum ConfirmEnd {
 }
 
 /// The last step before money moves: "정말 이체하겠습니까?", what will happen
-/// ([lines]), and the user's own password.
+/// (the account the money leaves, the account it goes into, the [amount]), and the
+/// user's own password.
 ///
 /// Two things happen, one after the other, and the dialog says which one failed:
 /// the password is checked (nothing is sent yet), then [send] runs (the transfer).
@@ -35,7 +36,9 @@ enum ConfirmEnd {
 Future<ConfirmEnd?> askPasswordAndSend(
   BuildContext context, {
   required String question,
-  required List<String> lines,
+  required String from,
+  required String to,
+  required String amount,
   required String confirmLabel,
   required Future<void> Function(String password) send,
   String idPrefix = 'transaction-confirm',
@@ -45,7 +48,9 @@ Future<ConfirmEnd?> askPasswordAndSend(
     barrierDismissible: false,
     builder: (_) => _PasswordConfirmDialog(
       question: question,
-      lines: lines,
+      from: from,
+      to: to,
+      amount: amount,
       confirmLabel: confirmLabel,
       send: send,
       idPrefix: idPrefix,
@@ -56,14 +61,18 @@ Future<ConfirmEnd?> askPasswordAndSend(
 class _PasswordConfirmDialog extends ConsumerStatefulWidget {
   const _PasswordConfirmDialog({
     required this.question,
-    required this.lines,
+    required this.from,
+    required this.to,
+    required this.amount,
     required this.confirmLabel,
     required this.send,
     required this.idPrefix,
   });
 
   final String question;
-  final List<String> lines;
+  final String from;
+  final String to;
+  final String amount;
   final String confirmLabel;
   final Future<void> Function(String password) send;
   final String idPrefix;
@@ -146,6 +155,7 @@ class _PasswordConfirmDialogState extends ConsumerState<_PasswordConfirmDialog> 
   @override
   Widget build(BuildContext context) {
     final prefix = widget.idPrefix;
+    final small = Theme.of(context).textTheme.bodySmall;
     return TestId(
       '$prefix-dialog',
       child: PopScope(
@@ -170,10 +180,25 @@ class _PasswordConfirmDialogState extends ConsumerState<_PasswordConfirmDialog> 
               const SizedBox(height: 6),
               TestId(
                 '$prefix-summary',
-                child: Text(widget.lines.join('\n'), style: Theme.of(context).textTheme.bodySmall),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TestId('$prefix-from', child: Text(widget.from, style: small)),
+                    const Icon(Icons.arrow_downward, size: 16),
+                    TestId('$prefix-to', child: Text(widget.to, style: small)),
+                    const SizedBox(height: 4),
+                    TestId(
+                      '$prefix-amount',
+                      child: Text(
+                        widget.amount,
+                        style: small?.copyWith(fontSize: (small.fontSize ?? 12) + 3),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 8),
-              Text('자신의 계정 비밀번호를 입력해주세요.', style: Theme.of(context).textTheme.bodySmall),
+              Text('계정의 비밀번호를 입력해주세요.', style: small),
               const SizedBox(height: 8),
               if (_error != null) ...[
                 FormErrorBanner(id: '$prefix-error', message: _error!),
@@ -192,7 +217,7 @@ class _PasswordConfirmDialogState extends ConsumerState<_PasswordConfirmDialog> 
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _confirm(),
                   decoration: const InputDecoration(
-                    labelText: '비밀번호',
+                    labelText: '계정의 비밀번호',
                     // No room for a notice: it is in the empty field.
                     hintText: '이 데모 앱의 비밀번호',
                     isDense: true,

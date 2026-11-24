@@ -159,7 +159,7 @@ void main() {
       await tapId(tester, 'sidenav-bankaccounts');
 
       expect(find.descendant(of: byId('bankaccount-limit'), matching: find.text('은행 계좌는 최대 60개까지 만들 수 있습니다.')), findsOneWidget);
-      final button = tester.widget<TextButton>(find.descendant(of: byId('bankaccount-new'), matching: find.bySubtype<TextButton>()));
+      final button = tester.widget<FilledButton>(find.descendant(of: byId('bankaccount-new'), matching: find.byType(FilledButton)));
       expect(button.onPressed, isNull);
     });
 
@@ -474,7 +474,7 @@ void main() {
       expect(byId('bankaccount-form'), findsNothing);
       expect(find.text('Third Test Bank'), findsOneWidget);
       expect(byId('alert-bar-success'), findsOneWidget);
-      expect(find.byType(ListTile), findsNWidgets(3));
+      expect(find.descendant(of: byId('bankaccount-list'), matching: find.byType(ListTile)), findsNWidgets(3));
     });
 
     testWidgets('retry loads the list again', (tester) async {

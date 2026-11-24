@@ -29,7 +29,7 @@ void main() {
       expect(server.calls.where((c) => c == 'POST /likes/t1'), hasLength(1));
       expect(textIn('transaction-like-count-t1', '2'), findsOneWidget);
       expect(tester.widget<IconButton>(find.descendant(of: byId('transaction-like-button-t1'), matching: find.byType(IconButton))).onPressed, isNull);
-      expect(find.byIcon(Icons.thumb_up_outlined), findsOneWidget); // like the web
+      expect(find.byIcon(Icons.thumb_up), findsOneWidget);
       expect(find.byIcon(Icons.favorite), findsNothing);
       expect(find.byIcon(Icons.favorite_border), findsNothing);
     });

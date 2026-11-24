@@ -62,7 +62,7 @@ class CreateTransactionController extends Notifier<CreateState> {
     state = const CreateState();
   }
 
-  /// "다른 거래 만들기"
+  /// "다른 이체 진행하기"
   void startOver() {
     state = const CreateState();
   }

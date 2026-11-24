@@ -58,6 +58,7 @@ class Transaction {
     this.createdAt,
     this.source,
     this.myAccount,
+    this.privacyLevel,
   });
 
   factory Transaction.fromJson(Map<String, dynamic> json) {
@@ -84,6 +85,7 @@ class Transaction {
       myAccount: json['myAccount'] is Map<String, dynamic>
           ? MyAccountInfo.fromJson(json['myAccount'] as Map<String, dynamic>)
           : null,
+      privacyLevel: json['privacyLevel'] as String?,
     );
   }
 
@@ -111,6 +113,10 @@ class Transaction {
 
   /// The user's own bank account in this transaction (null when it is not theirs).
   final MyAccountInfo? myAccount;
+
+  /// Who can see it: `public`, `private` (or the old `contacts`). Null when the
+  /// server does not say.
+  final String? privacyLevel;
 
   /// When the payment or deposit was made. Missing if the server does not say.
   final DateTime? createdAt;

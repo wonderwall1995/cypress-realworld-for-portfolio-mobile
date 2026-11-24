@@ -47,11 +47,15 @@ class CreateTransactionPage extends ConsumerWidget {
             child: _StepHeader(step: state.step),
           ),
         ),
-        body: switch (state.step) {
-          CreateStep.selectContact => const _SelectContactStep(),
-          CreateStep.payment => _PaymentStep(receiver: state.receiver!),
-          CreateStep.complete => _CompleteStep(created: state.created!),
-        },
+        // The buttons stay clear of the phone's own buttons (back, home, recent apps).
+        body: SafeArea(
+          top: false,
+          child: switch (state.step) {
+            CreateStep.selectContact => const _SelectContactStep(),
+            CreateStep.payment => _PaymentStep(receiver: state.receiver!),
+            CreateStep.complete => _CompleteStep(created: state.created!),
+          },
+        ),
       ),
     );
   }
@@ -163,21 +167,22 @@ class _SelectContactStepState extends ConsumerState<_SelectContactStep> {
                 ),
               ),
             ),
-            data: (list) => list.isEmpty
-                ? const Center(
-                    child: TestId(
-                      'user-list-empty',
-                      child: Text('검색 결과가 없습니다.'),
-                    ),
-                  )
-                : TestId(
-                    'users-list',
-                    child: ListView.separated(
-                      itemCount: list.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, i) => _UserTile(user: list[i]),
-                    ),
-                  ),
+            data: (all) {
+              final list = all.where((user) => user.hasBankAccount).toList();
+              if (list.isEmpty) {
+                return const Center(
+                  child: TestId('user-list-empty', child: Text('검색 결과가 없습니다.')),
+                );
+              }
+              return TestId(
+                'users-list',
+                child: ListView.separated(
+                  itemCount: list.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, i) => _UserTile(user: list[i]),
+                ),
+              );
+            },
           ),
         ),
       ],
@@ -314,11 +319,9 @@ class _PaymentStepState extends ConsumerState<_PaymentStep> {
     final end = await askPasswordAndSend(
       context,
       question: '정말 이체하겠습니까?',
-      lines: [
-        '${myAccount!.bankName} ${myAccount.maskedAccountNumber} → '
-            '${widget.receiver.fullName}님 ${other == null ? '' : '${other.bankName} ····${other.last4}'}',
-        formatUsd(cents!),
-      ],
+      from: '${myAccount!.bankName} ${myAccount.maskedAccountNumber}',
+      to: '${widget.receiver.fullName}님 ${other == null ? '' : '${other.bankName} ····${other.last4}'}',
+      amount: formatUsd(cents!),
       confirmLabel: '이체',
       send: (password) async {
         try {
@@ -414,14 +417,12 @@ class _PaymentStepState extends ConsumerState<_PaymentStep> {
                     child: TextFormField(
                       controller: _description,
                       decoration: const InputDecoration(
-                        labelText: '메모',
+                        labelText: '메모 (선택)',
                         helperText: memoDemoNotice,
                         helperMaxLines: 4,
                         border: OutlineInputBorder(),
                       ),
                       textInputAction: TextInputAction.done,
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? '메모를 입력하세요.' : null,
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -654,11 +655,13 @@ class _CompleteStep extends ConsumerWidget {
                       '${created.receiver.fullName}님에게 $amount를 $verb했습니다.',
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '메모: ${created.description}',
-                      textAlign: TextAlign.center,
-                    ),
+                    if (created.description.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        '메모: ${created.description}',
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -698,7 +701,7 @@ class _CompleteStep extends ConsumerWidget {
                 child: OutlinedButton(
                   onPressed: () =>
                       ref.read(createTransactionProvider.notifier).startOver(),
-                  child: const Text('다른 거래 만들기'),
+                  child: const Text('다른 이체 진행하기'),
                 ),
               ),
             ],

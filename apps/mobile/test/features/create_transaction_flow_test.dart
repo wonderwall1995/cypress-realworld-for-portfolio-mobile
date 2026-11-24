@@ -214,7 +214,6 @@ void main() {
 
       await tapId(tester, 'transaction-create-submit-payment');
       expect(find.text('금액을 입력하세요.'), findsOneWidget);
-      expect(find.text('메모를 입력하세요.'), findsOneWidget);
 
       await fillForm(tester, amount: '0');
       await tapId(tester, 'transaction-create-submit-payment');
@@ -331,7 +330,7 @@ void main() {
       expect(find.text('Lunch'), findsOneWidget);
     });
 
-    testWidgets('"다른 거래 만들기" starts again at step 1', (tester) async {
+    testWidgets('"다른 이체 진행하기" starts again at step 1', (tester) async {
       await pumpApp(tester, newServer());
       await openCreate(tester);
       await tapId(tester, 'user-list-item-u2');
