@@ -415,14 +415,14 @@
 - 만든 APK의 버전 이름이 `0.100-<지문>`인 것과, 모양이 틀린 버전이면 빌드가 시작되지 않는 것을 확인했다.
 - 기기에서 읽는 것과 진짜 번호 서버에 보내는 것은 다음 정식 실행에서 본다(미확인).
 
-## 땀 18. 내 PC에서 릴리스를 자동으로
+## 땀 18. 버전을 올려 main에 넣으면 자동으로 공개
 
 할 일:
 
-1. 명령 하나로 release APK를 만들고, 서명과 내용을 확인하고, GitHub에 초안으로 올린다. 공개는 하지 않는다. GitHub Actions를 쓰지 않는다.
+1. 루트 `package.json`의 버전을 사람이 올리고 `main`에 병합하거나 push하면, GitHub Actions가 APK를 만들어 시험판으로 공개한다. (처음에는 내 PC에서 초안까지 올리는 명령으로 만들었다가, User의 결정으로 바꿨다.)
 
 결과:
 
-- `tools/release.mts`, `pnpm release:build`, `pnpm release:draft`. 방법은 `docs/release/github-release-apk.md` 0절.
-- 진짜 빌드를 한 번 했고(올리지 않음), 사본 저장소와 가짜 flutter와 가짜 gh로 26가지 상황을 확인했다.
-- 배포 서버 주소로 만든 x86_64 release 앱이 에뮬레이터에서 열리고 서버에 닿았다. 로그인, arm64, 실제 폰, 진짜 GitHub에 올리는 것은 미확인이다.
+- `.github/workflows/release.yml`, `tools/release.mts`, `tools/release-secrets.mts`. 방법은 `docs/release/github-release-apk.md` 0절.
+- 사본 저장소와 가짜 gh로 33가지, 깨끗한 Ubuntu 24.04에서 워크플로의 명령을 버리는 키로 확인했다.
+- 배포 서버 주소로 만든 x86_64 release 앱이 에뮬레이터에서 열리고 서버에 닿았다. 로그인, arm64, 실제 폰, 진짜 GitHub Actions는 미확인이다.

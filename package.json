@@ -1,5 +1,6 @@
 {
   "name": "cypress-realworld-for-personal-portfolio-mobile",
+  "version": "0.0.0",
   "private": true,
   "license": "MIT",
   "scripts": {
@@ -15,8 +16,8 @@
     "test:types": "tsc -p tests/e2e",
     "test:generate": "prisma generate --schema tests/e2e/db/schema.prisma",
     "test:run": "tsx tests/e2e/test-run.ts",
-    "release:build": "tsx tools/release.mts",
-    "release:draft": "tsx tools/release.mts --draft"
+    "release:build": "node tools/release.mts build",
+    "release:secrets": "node tools/release-secrets.mts"
   },
   "devDependencies": {
     "@prisma/client": "6.19.3",

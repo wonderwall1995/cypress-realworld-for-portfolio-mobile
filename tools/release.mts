@@ -1,27 +1,24 @@
-// 내 PC에서 release APK를 만들고 GitHub에 초안으로 올린다. 공개(Publish)는 하지 않는다: 사람이 GitHub 화면에서 누른다.
-//   pnpm release:build   만들고 확인만 한다 (아무것도 올리지 않는다)
-//   pnpm release:draft   만들고 확인한 뒤, 초안(draft) + 시험판(pre-release)으로 올린다
-//   --try                아직 main 이 아닌 코드로 만들어 본다 (release:build 에서만)
-// 서명 키와 비밀번호는 이 PC를 떠나지 않는다. 버전은 apps/mobile/VERSION 하나를 올리면 된다.
+// 릴리스의 세 단계. GitHub Actions(.github/workflows/release.yml)가 부른다. 설치 없이 Node 24로 바로 돈다 (node tools/release.mts ...).
+//   decide    main 의 package.json 버전이 마지막 릴리스보다 높은가
+//   build     APK를 만들고 확인한다 (내 PC에서는 pnpm release:build. 아무것도 올리지 않는다)
+//   publish   시험판(pre-release)으로 공개한다. GitHub Actions 안에서만 된다
+// 릴리스의 버전은 루트 package.json 의 version 이다. 사람이 올린다. (번호 서버에 보내는 apps/mobile/VERSION 과는 따로다)
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
-import { appSourceFingerprint, ROOT, writtenVersion } from "../tests/e2e/run-code";
+import { pathToFileURL } from "node:url";
 
+const ROOT = join(import.meta.dirname, "..");
 const APP_FOLDER = join(ROOT, "apps", "mobile");
-const BUILT = join(APP_FOLDER, "build", "app", "outputs", "flutter-apk");
-const ENV_FILE = join(ROOT, ".env.release"); // API_BASE_URL=https://.../api 커밋하지 않는다
-const KEY_FILE = join(APP_FOLDER, "android", "key.properties");
+const WINDOWS = process.platform === "win32";
 // 서명 인증서의 SHA-256. 비밀이 아니다. 다른 키로 서명되면 받은 사람이 업데이트할 수 없다
 const CERTIFICATE = "ab445d4d105c69fa97b82aa63b08cd3665249183549e58a6b2aefecddeb43b4f";
 const FILES = [
   { abi: "arm64-v8a", name: "arm64" },
   { abi: "x86_64", name: "x86_64" },
 ];
-
-const draft = process.argv.includes("--draft");
-const trying = process.argv.includes("--try");
 
 function stop(message: string): never {
   console.error(`\n릴리스를 멈췄습니다: ${message}\n`);
@@ -30,136 +27,160 @@ function stop(message: string): never {
 function check(ok: unknown, message: string): asserts ok {
   if (!ok) stop(message);
 }
-const read = (command: string, ...args: string[]) => {
-  const run = spawnSync(command, args, { cwd: ROOT, encoding: "utf8", timeout: 120_000, maxBuffer: 64 * 1024 * 1024 });
-  return { ok: run.status === 0, text: (run.stdout ?? "").trim(), error: (run.stderr ?? "").trim() };
+const run = (command: string, ...args: string[]) => {
+  const done = spawnSync(command, args, { cwd: ROOT, encoding: "utf8", timeout: 300_000, maxBuffer: 64 * 1024 * 1024 });
+  return { ok: done.status === 0, text: (done.stdout ?? "").trim(), error: (done.stderr ?? String(done.error ?? "")).trim() };
 };
 const git = (...args: string[]) => {
-  const run = read("git", ...args);
-  check(run.ok, `git ${args[0]} 을(를) 하지 못했습니다. ${run.error}`);
-  return run.text;
-};
-const changes = () => git("status", "--porcelain", "--untracked-files=no");
-// Windows의 flutter 는 bat 파일이라 셸로 부른다
-const flutter = (args: string) => {
-  console.log(`\n> flutter ${args}`);
-  return spawnSync(`flutter ${args}`, { cwd: APP_FOLDER, stdio: "inherit", shell: true }).status === 0;
+  const done = run("git", ...args);
+  check(done.ok, `git ${args[0]} 을(를) 하지 못했습니다. ${done.error}`);
+  return done.text;
 };
 
-// 1) 무엇을 만드는가
-check(!(draft && trying), "--try 로 만든 것은 올릴 수 없습니다.");
-const version = writtenVersion() ?? stop("apps/mobile/VERSION 에 버전이 없거나 모양이 틀립니다 (예: 0.100).");
-const tag = `app-v${version}`;
-const commit = git("rev-parse", "HEAD");
-const fingerprint = appSourceFingerprint();
-// 안쪽 번호는 커져야 덮어 설치된다. 버전에서 계산하므로 VERSION 만 올리면 된다 (0.100 -> 100, 1.5 -> 1000005)
-const [major, minor] = version.split(".").map(Number);
-const buildNumber = major * 1_000_000 + minor;
-check(buildNumber > 0 && buildNumber < 2_000_000_000, "VERSION 이 너무 작거나 큽니다.");
+// ---- 버전 ----
+type Version = [number, number, number];
+/** 앞.가운데.뒤. 모양이 틀리면 undefined */
+export const parseVersion = (text: unknown): Version | undefined => {
+  const found = /^(0|[1-9]\d{0,2})\.(0|[1-9]\d{0,2})\.(0|[1-9]\d{0,2})$/.exec(typeof text === "string" ? text : "");
+  return found ? [Number(found[1]), Number(found[2]), Number(found[3])] : undefined;
+};
+/** 안쪽 번호. 커져야 덮어 설치된다 (0.100.0 -> 100000). 버전이 높으면 이것도 반드시 크다 */
+export const buildNumberOf = ([major, middle, last]: Version) => major * 1_000_000 + middle * 1_000 + last;
+/** 이미 릴리스한 버전 가운데 가장 높은 것. 다른 모양의 태그는 보지 않는다. 없으면 0.0.0 */
+export const newestRelease = (tags: string): Version =>
+  tags
+    .split("\n")
+    .map((line) => parseVersion(/refs\/tags\/app-v(\S+)$/.exec(line.trim())?.[1]))
+    .filter((version) => version !== undefined)
+    .reduce<Version>((best, one) => (buildNumberOf(one) > buildNumberOf(best) ? one : best), [0, 0, 0]);
 
-if (!trying) {
-  git("fetch", "-q", "--tags", "origin");
-  check(git("branch", "--show-current") === "main", "main 브랜치에서만 만듭니다. 다른 브랜치에서 만들어 보려면 pnpm release:build --try");
-  check(commit === git("rev-parse", "refs/remotes/origin/main"), "내 main 과 GitHub의 main 이 다릅니다. pull 이나 push 를 먼저 하세요.");
-  check(changes() === "", "커밋하지 않은 변경이 있습니다.");
-  check(git("ls-remote", "--tags", "origin", `refs/tags/${tag}`) === "", `${tag} 는 이미 공개한 버전입니다. apps/mobile/VERSION 을 올리세요.`);
-}
+const written = (): string => JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version;
+const checkedVersion = () => {
+  const text = written();
+  const version = parseVersion(text);
+  check(version, `package.json 의 version(${text ?? "없음"})은 0.100.0 처럼 세 자리 숫자여야 합니다 (자리마다 999까지).`);
+  return { text, version };
+};
+const outFolder = (text: string) => join(APP_FOLDER, "build", `release-${text}`);
+const fileNames = (text: string) => [...FILES.map(({ name }) => `rwa-mobile-${text}-${name}.apk`), "SHA256SUMS.txt"];
 
-// 2) 준비물
-check(existsSync(ENV_FILE), ".env.release 가 없습니다. 저장소 맨 위에 만들고 API_BASE_URL=https://.../api 를 적으세요.");
-const api = /^API_BASE_URL=(\S+)\s*$/m.exec(readFileSync(ENV_FILE, "utf8"))?.[1] ?? "";
-check(/^https:\/\/\S+\/api$/.test(api), ".env.release 의 API_BASE_URL 은 https:// 로 시작하고 /api 로 끝나야 합니다.");
-check(existsSync(KEY_FILE), "apps/mobile/android/key.properties 가 없습니다. 이대로 만들면 디버그 키로 서명됩니다.");
-const passwords = [...readFileSync(KEY_FILE, "utf8").matchAll(/^(?:storePassword|keyPassword)=(.+?)\r?$/gm)].map((found) => found[1]);
-check(passwords.length === 2, "key.properties 의 비밀번호 칸이 비어 있습니다.");
-const toolsFolder = join(process.env.ANDROID_HOME || join(process.env.LOCALAPPDATA ?? "", "Android", "Sdk"), "build-tools");
-check(existsSync(toolsFolder), `Android SDK의 build-tools 를 찾지 못했습니다 (${toolsFolder}).`);
-const newest = readdirSync(toolsFolder).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).at(-1);
-check(newest, "Android SDK의 build-tools 가 비어 있습니다.");
-const tools = join(toolsFolder, newest);
-const java = [
-  join(process.env.JAVA_HOME ?? "", "bin", "java.exe"),
-  "C:\\Program Files\\Android\\Android Studio\\jbr\\bin\\java.exe",
-].find((path) => existsSync(path));
-check(java, "Java를 찾지 못했습니다. Android Studio를 설치하거나 JAVA_HOME 을 정하세요.");
-const answer = await fetch(`${api}/checkAuth`, { signal: AbortSignal.timeout(15_000) })
-  .then((got) => got.status)
-  .catch(() => 0);
-check(answer === 401, `배포 서버가 답하지 않습니다 (${answer === 0 ? "연결 안 됨" : `응답 ${answer}`}).`);
-if (draft) {
-  check(read("gh", "--version").ok, "gh 가 없습니다. winget install GitHub.cli 로 설치하고 CMD 창을 새로 여세요.");
-  check(read("gh", "auth", "status", "--hostname", "github.com").ok, "gh 에 로그인하지 않았습니다. gh auth login 을 하세요.");
-  // 초안은 태그가 없어서 위의 태그 검사에 걸리지 않는다
-  const releases = read("gh", "release", "list", "--limit", "100", "--json", "tagName", "--jq", ".[].tagName");
-  check(releases.ok, `GitHub의 릴리스 목록을 읽지 못했습니다. ${releases.error}`);
-  check(!releases.text.split(/\r?\n/).includes(tag), `${tag} 릴리스(또는 초안)가 이미 있습니다. GitHub에서 초안을 지우거나 VERSION 을 올리세요.`);
-}
-console.log(`릴리스 ${tag}: 커밋 ${commit.slice(0, 7)}, 지문 ${fingerprint}, 안쪽 번호 ${buildNumber}${trying ? " (만들어 보기)" : ""}`);
+// ---- decide ----
+const decide = () => {
+  const { text, version } = checkedVersion();
+  const newest = newestRelease(git("ls-remote", "--tags", "origin", "refs/tags/app-v*"));
+  const release = buildNumberOf(version) > buildNumberOf(newest);
+  console.log(`package.json ${text}, 마지막 릴리스 ${newest.join(".")}: ${release ? "릴리스합니다" : "버전이 오르지 않아 릴리스하지 않습니다"}`);
+  if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `release=${release}\nversion=${text}\n`);
+};
 
-// 3) 검사하고 만든다
-check(flutter("analyze"), "flutter analyze 에서 문제가 나왔습니다.");
-check(flutter("test"), "앱의 테스트가 실패했습니다.");
-for (const { abi } of FILES) rmSync(join(BUILT, `app-${abi}-release.apk`), { force: true }); // 예전 파일을 올리지 않게
-check(
-  flutter(
-    `build apk --release --split-per-abi --build-name=${version}-${fingerprint} --build-number=${buildNumber} --dart-define-from-file=../../.env.release`
-  ),
-  "APK를 만들지 못했습니다."
-);
-check(appSourceFingerprint() === fingerprint && git("rev-parse", "HEAD") === commit, "만드는 동안 소스가 바뀌었습니다. 다시 하세요.");
-if (!trying) check(changes() === "", "만드는 동안 커밋하지 않은 변경이 생겼습니다.");
+// ---- build ----
+const flutter = (...args: string[]) => {
+  console.log(`\n> flutter ${args.join(" ")}`);
+  // Windows의 flutter 는 bat 파일이라 셸로 부른다
+  return spawnSync(WINDOWS ? `flutter ${args.join(" ")}` : "flutter", WINDOWS ? [] : args, { cwd: APP_FOLDER, stdio: "inherit", shell: WINDOWS }).status === 0;
+};
+const apiAddress = () => {
+  const file = join(ROOT, ".env.release"); // 내 PC에서만. 커밋하지 않는다
+  const text = process.env.API_BASE_URL ?? (existsSync(file) ? /^API_BASE_URL=(\S+)\s*$/m.exec(readFileSync(file, "utf8"))?.[1] : undefined);
+  check(text && /^https:\/\/[\w.:-]+\/api$/.test(text), "API_BASE_URL 은 https:// 로 시작하고 /api 로 끝나야 합니다 (GitHub의 변수, 내 PC에서는 .env.release).");
+  return text;
+};
+const androidTools = () => {
+  const sdk = process.env.ANDROID_HOME || (WINDOWS ? join(process.env.LOCALAPPDATA ?? "", "Android", "Sdk") : join(homedir(), "Android", "Sdk"));
+  const folder = join(sdk, "build-tools");
+  const newest = existsSync(folder)
+    ? readdirSync(folder).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).at(-1)
+    : undefined;
+  check(newest, `Android SDK의 build-tools 를 찾지 못했습니다 (${folder}).`);
+  const studio = "C:\\Program Files\\Android\\Android Studio\\jbr\\bin\\java.exe";
+  const home = process.env.JAVA_HOME ? join(process.env.JAVA_HOME, "bin", WINDOWS ? "java.exe" : "java") : "";
+  return {
+    aapt: join(folder, newest, WINDOWS ? "aapt.exe" : "aapt"),
+    apksigner: join(folder, newest, "lib", "apksigner.jar"),
+    java: [home, WINDOWS ? studio : ""].find((path) => path && existsSync(path)) ?? "java",
+  };
+};
 
-// 4) 만든 파일을 확인한다
-const out = join(APP_FOLDER, "build", `release-${version}${trying ? "-try" : ""}`);
-rmSync(out, { recursive: true, force: true });
-const inside = join(out, "inside");
-const sums: string[] = [];
-for (const { abi, name } of FILES) {
-  const file = `rwa-mobile-${version}-${name}.apk`;
-  const path = join(out, file);
-  mkdirSync(inside, { recursive: true });
-  copyFileSync(join(BUILT, `app-${abi}-release.apk`), path);
-  const signature = read(java, "-jar", join(tools, "lib", "apksigner.jar"), "verify", "--print-certs", path);
-  check(signature.ok && signature.text.includes(CERTIFICATE), `${file} 이 내 서명 키로 서명되지 않았습니다.`);
-  const badge = read(join(tools, "aapt.exe"), "dump", "badging", path).text;
-  check(badge.includes(`versionName='${version}-${fingerprint}'`), `${file} 의 버전이 다릅니다.`);
-  check(badge.includes(`native-code: '${abi}'`), `${file} 의 기기 종류가 다릅니다.`);
-  check(!badge.includes("application-debuggable"), `${file} 이 release 앱이 아닙니다.`);
-  // APK는 zip 이다. 풀어서 안을 본다
-  const tar = join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe");
-  check(read(tar, "-xf", path, "-C", inside).ok, `${file} 을 풀지 못했습니다.`);
-  const contents = readdirSync(inside, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile());
-  const bytes = contents.map((entry) => readFileSync(join(entry.parentPath, entry.name)));
-  check(bytes.some((content) => content.includes(api)), `${file} 에 배포 서버 주소가 없습니다.`);
-  check(!bytes.some((content) => content.includes("10.0.2.2")), `${file} 에 개발용 주소가 있습니다.`);
-  check(!bytes.some((content) => passwords.some((password) => content.includes(password))), `${file} 에 서명 비밀번호가 있습니다.`);
-  check(!contents.some((entry) => /\.(jks|keystore)$|^key\.properties$|^\.env/.test(entry.name)), `${file} 에 비밀 파일이 있습니다.`);
-  rmSync(inside, { recursive: true, force: true });
-  sums.push(`${createHash("sha256").update(readFileSync(path)).digest("hex")}  ${file}`);
-}
-writeFileSync(join(out, "SHA256SUMS.txt"), `${sums.join("\n")}\n`);
-const notes = readFileSync(join(ROOT, "docs", "release", "release-notes.template.md"), "utf8")
-  .replace(/\r\n/g, "\n")
-  .replaceAll("{{version}}", version)
-  .replaceAll("{{commit}}", commit.slice(0, 7))
-  .replaceAll("{{certificate}}", CERTIFICATE);
-check(!notes.includes("{{"), "릴리스 글에 채우지 못한 칸이 있습니다.");
-const notesFile = join(out, "release-notes.md");
-writeFileSync(notesFile, notes);
-console.log(`\n확인함: 서명, 버전, 서버 주소, 비밀 값 없음\n${out}\n${sums.join("\n")}`);
+const build = () => {
+  const { text, version } = checkedVersion();
+  check(buildNumberOf(version) > 0, "package.json 의 version 이 0.0.0 입니다. 먼저 올리세요.");
+  const api = apiAddress();
+  const keyFile = join(APP_FOLDER, "android", "key.properties");
+  check(existsSync(keyFile), "apps/mobile/android/key.properties 가 없습니다. 이대로 만들면 디버그 키로 서명됩니다.");
+  const passwords = [...readFileSync(keyFile, "utf8").matchAll(/^(?:storePassword|keyPassword)=(.+?)\r?$/gm)].map((found) => found[1]);
+  check(passwords.length === 2, "key.properties 의 비밀번호 칸이 비어 있습니다.");
+  const { aapt, apksigner, java } = androidTools();
 
-// 5) 초안으로 올린다
-if (draft) {
-  const files = [...FILES.map(({ name }) => `rwa-mobile-${version}-${name}.apk`), "SHA256SUMS.txt"].map((file) => join(out, file));
-  console.log("\nGitHub에 초안으로 올립니다...");
-  const made = spawnSync(
-    "gh",
-    ["release", "create", tag, ...files, "--draft", "--prerelease", "--target", commit, "--title", `RWA Mobile ${version} (시험판)`, "--notes-file", notesFile],
-    { cwd: ROOT, encoding: "utf8", timeout: 600_000 }
+  const built = join(APP_FOLDER, "build", "app", "outputs", "flutter-apk");
+  for (const { abi } of FILES) rmSync(join(built, `app-${abi}-release.apk`), { force: true }); // 예전 파일을 올리지 않게
+  check(
+    flutter("build", "apk", "--release", "--split-per-abi", `--build-name=${text}`, `--build-number=${buildNumberOf(version)}`, `--dart-define=API_BASE_URL=${api}`),
+    "APK를 만들지 못했습니다."
   );
-  if (made.status !== 0) stop(`초안을 올리지 못했습니다. GitHub의 Releases에 반쯤 올라간 초안이 있는지 보세요.\n${made.stderr ?? made.error}`);
-  console.log(`초안을 만들었습니다: ${made.stdout.trim()}`);
-  console.log("아직 공개되지 않았습니다. 폰에서 확인한 뒤 GitHub 화면에서 Publish release 를 누르세요.");
-} else {
-  console.log("\n아무것도 올리지 않았습니다. 올리려면 pnpm release:draft");
+
+  const out = outFolder(text);
+  rmSync(out, { recursive: true, force: true });
+  const inside = join(out, "inside");
+  const sums: string[] = [];
+  for (const { abi, name } of FILES) {
+    const file = `rwa-mobile-${text}-${name}.apk`;
+    const path = join(out, file);
+    mkdirSync(inside, { recursive: true });
+    copyFileSync(join(built, `app-${abi}-release.apk`), path);
+    const signature = run(java, "-jar", apksigner, "verify", "--print-certs", path);
+    check(signature.ok && signature.text.includes(CERTIFICATE), `${file} 이 내 서명 키로 서명되지 않았습니다.`);
+    const badge = run(aapt, "dump", "badging", path).text;
+    check(badge.includes(`versionName='${text}'`), `${file} 의 버전이 다릅니다.`);
+    check(badge.includes(`native-code: '${abi}'`), `${file} 의 기기 종류가 다릅니다.`);
+    check(!badge.includes("application-debuggable"), `${file} 이 release 앱이 아닙니다.`);
+    // APK는 zip 이다. 풀어서 안을 본다
+    const unpacked = WINDOWS
+      ? run(join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe"), "-xf", path, "-C", inside)
+      : run("unzip", "-q", path, "-d", inside);
+    check(unpacked.ok, `${file} 을 풀지 못했습니다.`);
+    const contents = readdirSync(inside, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile());
+    const bytes = contents.map((entry) => readFileSync(join(entry.parentPath, entry.name)));
+    check(bytes.some((content) => content.includes(api)), `${file} 에 배포 서버 주소가 없습니다.`);
+    check(!bytes.some((content) => content.includes("10.0.2.2")), `${file} 에 개발용 주소가 있습니다.`);
+    check(!bytes.some((content) => passwords.some((password) => content.includes(password))), `${file} 에 서명 비밀번호가 있습니다.`);
+    check(!contents.some((entry) => /\.(jks|keystore)$|^key\.properties$|^\.env/.test(entry.name)), `${file} 에 비밀 파일이 있습니다.`);
+    rmSync(inside, { recursive: true, force: true });
+    sums.push(`${createHash("sha256").update(readFileSync(path)).digest("hex")}  ${file}`);
+  }
+  writeFileSync(join(out, "SHA256SUMS.txt"), `${sums.join("\n")}\n`);
+  const notes = readFileSync(join(ROOT, "docs", "release", "release-notes.template.md"), "utf8")
+    .replace(/\r\n/g, "\n")
+    .replaceAll("{{version}}", text)
+    .replaceAll("{{commit}}", git("rev-parse", "--short=7", "HEAD"))
+    .replaceAll("{{certificate}}", CERTIFICATE);
+  check(!notes.includes("{{"), "릴리스 글에 채우지 못한 칸이 있습니다.");
+  writeFileSync(join(out, "release-notes.md"), notes);
+  console.log(`\n확인함: 서명, 버전, 서버 주소, 비밀 값 없음\n${out}\n${sums.join("\n")}`);
+};
+
+// ---- publish ----
+const publish = () => {
+  check(process.env.GITHUB_ACTIONS === "true", "공개는 GitHub Actions 안에서만 합니다.");
+  const { text } = checkedVersion();
+  const commit = git("rev-parse", "HEAD");
+  check(commit === process.env.GITHUB_SHA, "받은 코드가 이 실행의 커밋이 아닙니다.");
+  const out = outFolder(text);
+  const files = fileNames(text).map((name) => join(out, name));
+  for (const file of [...files, join(out, "release-notes.md")]) check(existsSync(file), `올릴 파일이 없습니다: ${file}`);
+  // 만든 작업에서 이 작업으로 넘어오는 동안 바뀌지 않았는지
+  for (const line of readFileSync(join(out, "SHA256SUMS.txt"), "utf8").trim().split("\n")) {
+    const [sum, name] = line.split("  ");
+    check(createHash("sha256").update(readFileSync(join(out, name))).digest("hex") === sum, `${name} 이 만든 것과 다릅니다.`);
+  }
+  // 파일을 다 올린 뒤에 공개된다 (gh 가 초안으로 만들고 마지막에 연다)
+  const made = run("gh", "release", "create", `app-v${text}`, ...files, "--prerelease", "--target", commit, "--title", `RWA Mobile ${text} (시험판)`, "--notes-file", join(out, "release-notes.md"));
+  check(made.ok, `공개하지 못했습니다. GitHub의 Releases에 남은 초안이 있으면 지우고 다시 돌리세요.\n${made.error}`);
+  console.log(`공개했습니다: ${made.text}`);
+};
+
+// 시험이 부품만 가져갈 때는 아무것도 하지 않는다
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const command = { decide, build, publish }[process.argv[2] ?? ""];
+  if (!command) stop("node tools/release.mts decide | build | publish");
+  command();
 }

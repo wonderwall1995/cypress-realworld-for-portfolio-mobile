@@ -20,7 +20,7 @@
 - 53번: 입금·이체의 요청 식별자(중복 방지)와 오류 code를 서버에 넣자. (웹 레포에 요청함. 함께 요청한 contacts 거절, 동시 요청, 가입 409는 웹이 마쳤다.)
 - 62번: 서버를 다시 켜도 로그인이 유지되게 하자. (웹 레포에 요청함. 로그인 정보가 서버 메모리에만 있다.)
 - 69번: 실제 폰과 release 앱을 배포된 HTTPS 서버로 확인하고, main에 병합하자. (User. push는 했다.)
-- 74번: GitHub Release에 시험판 APK를 올리자. (마켓에는 올리지 않는다. docs/release/github-release-apk.md)
+- 74번: pnpm release:secrets를 한 번 하고, package.json의 버전을 올려 첫 시험판 APK를 GitHub Release에 공개하자. (User. 마켓에는 올리지 않는다. docs/release/github-release-apk.md 0절)
 - 81번: 웹이 비밀번호 횟수 제한(429)을 지우면, 앱 비밀번호 창의 429 처리를 지우고 E2E 003만 돌리자. (로그인과 가입의 429 안내는 프록시 때문에 남긴다.)
 - 82번: 정식 실행을 한 번 해서, 기기에서 버전을 읽는 것과 진짜 번호 서버에 보내는 것을 확인하자. (지금은 정식 실행을 멈추고 부분 시험만 한다.)
 - 83번: release 서명 키와 비밀번호를 두 곳에 백업하자. (User)
@@ -112,7 +112,7 @@
 - 78번: 정식 실행의 시험별 결과와 도구별 결과를 번호 서버에 기록한다. 저장되지 않은 결과가 있으면 block이다. 진짜 서버(로컬)에 저장되는 것을 확인했다.
 - 79번: 정식 실행은 번호를 받은 뒤 어떤 오류에도 finish나 block으로 끝난다. 기기 이름은 rwa-mobile이고, 잠금 파일의 변경도 시험 코드의 변경으로 센다. (가짜 번호 서버로 확인)
 - 80번: 앱의 버전을 사람이 apps/mobile/VERSION에 적고, 정식 실행이 깔린 앱의 버전을 보내고 서버의 경고를 보인다. (웹 318b21a. 가짜 번호 서버로 확인, 기기와 진짜 서버는 미확인)
-- 84번: 내 PC에서 명령 하나(pnpm release:draft)로 release APK를 만들고 확인해 GitHub에 초안으로 올린다. 공개는 사람이 누른다. (가짜 gh로 26가지 상황을 확인. 진짜 GitHub에 올리는 것은 미확인)
+- 84번: package.json의 버전을 올려 main에 병합하거나 push하면, GitHub Actions가 APK를 만들고 확인해 시험판으로 공개한다. (가짜 gh와 깨끗한 Ubuntu에서 확인. 진짜 GitHub Actions는 미확인)
 
 - 모바일 저장소를 만들고 git을 초기화했다. (main)
 - pnpm 워크스페이스 뼈대(apps/mobile Flutter 앱, tests/e2e, 루트 pnpm 스크립트)를 만들고 analyze와 기본 테스트 통과를 확인했다. (Android 실행과 iOS는 미확인)
@@ -197,7 +197,7 @@
 # Drops
 <!-- 할 필요 없음 판단된 업무 목록 -->
 - Google Play, App Store 마켓 배포. Demo 배포만 한다. (Cypress 이름 사용으로 상표 문제가 생길 수 있어 포기)
-- GitHub Actions의 analyze와 test 자동 확인. (User가 하지 않기로 했다.)
+- push마다 도는 GitHub Actions의 analyze와 test 자동 확인. (User가 하지 않기로 했다. 릴리스할 때만 도는 84번과는 다르다.)
 - 요청을 수락할 때 낼 계좌와 비밀번호를 묻기(29번). 만들었지만 웹과 서버가 요청 기능을 없애서 지웠다(34번).
 
 # Licenses
