@@ -9,7 +9,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { keptOutcomes, sendOutcome } from "./fixture/run-results";
-import { appSourceFingerprint, runCode } from "./run-code";
+import { appSourceFingerprint, runCode, writtenVersion } from "./run-code";
 
 const HERE = import.meta.dirname;
 const ROOT = join(HERE, "..", "..");
@@ -64,6 +64,23 @@ rmSync(RESULTS_FILE, { force: true });
 const running = runCode();
 if (!running.target) console.log("깔린 앱의 버전을 알 수 없습니다 (pnpm build 로 만든 앱이 아닙니다). 빈칸으로 기록합니다.");
 else if (running.target !== appSourceFingerprint()) console.log("깔린 앱이 지금의 앱 소스로 만든 것이 아닙니다. 깔린 앱의 버전으로 기록합니다.");
+if (running.target && running.targetVersion !== writtenVersion()) {
+  console.log(`깔린 앱의 버전(${running.targetVersion ?? "없음"})이 apps/mobile/VERSION(${writtenVersion() ?? "없음"})과 다릅니다. 깔린 앱의 버전으로 기록합니다.`);
+}
+
+// 버전과 코드가 맞지 않으면 서버가 알려 준다. 알리기만 하고 멈추지 않는다. 판단은 message 가 아니라 code 로 한다
+const WARNINGS: Record<string, string> = {
+  code_changed: "코드가 바뀌었는데 버전이 그대로입니다",
+  version_changed: "코드는 같은데 버전이 다릅니다. 예전 버전을 씁니다",
+  version_missing: "버전이 없습니다",
+  fingerprint_missing: "지문이 없어 코드를 확인할 수 없습니다",
+};
+const showWarnings = (warnings: unknown) => {
+  for (const warning of Array.isArray(warnings) ? warnings : []) {
+    const { part, code, sent, used } = warning ?? {};
+    console.log(`버전 경고 (${part}): ${WARNINGS[code] ?? code}. 적은 것 ${sent ?? "없음"}, 쓴 것 ${used ?? "없음"}`);
+  }
+};
 
 // 번호를 열거나 합류한다
 const started = await ask("", { platform: "app", device: DEVICE, code: running });
@@ -71,7 +88,8 @@ if (!started || ![200, 201].includes(started.status)) stop(`번호를 받지 못
 const run: {
   runNo: number;
   opened?: boolean;
-  versions?: { server?: string; target?: string | null }; // 버전을 모르는 서버는 주지 않는다
+  versions?: { server?: string | null; target?: string | null }; // 버전을 모르는 서버는 주지 않는다
+  warnings?: unknown;
   fixtures: Record<string, Record<string, string>>;
 } = await started!.json();
 
@@ -82,11 +100,14 @@ const tell = async (event: "finish" | "block") => {
       ? `실행 번호 ${run.runNo}: ${event === "finish" ? "끝까지 돌았음" : "중간에 멈춤 (block)"}`
       : `실행 번호 ${run.runNo}: ${event} 를 알리지 못했습니다. 서버가 10분 뒤에 block 으로 바꿉니다.`
   );
+  // 실행하는 동안 서버가 바뀌었으면 끝의 답에 경고가 있다
+  if (answer?.ok) showWarnings((await answer.json().catch(() => undefined))?.warnings);
 };
 try {
   console.log(
     `실행 번호 ${run.runNo} (${run.opened ? "새로 열었음" : "합류했음"}), 기기 ${DEVICE}, 서버 ${run.versions?.server ?? "모름"}, 앱 ${run.versions?.target ?? "모름"}`
   );
+  showWarnings(run.warnings);
   if (missingFrom(run.fixtures).length > 0) {
     throw new Error(`이 번호에 없는 이름표: ${missingFrom(run.fixtures).join(", ")}. 웹 저장소의 test-fixture-rules.ts 에 더해야 합니다.`);
   }
