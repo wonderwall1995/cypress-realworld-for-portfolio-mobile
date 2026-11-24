@@ -29,7 +29,7 @@
    grant select ("id", "senderId", "receiverId") on public.transactions to e2e_reader;
    ```
 
-5. `pnpm e2e:generate` (Prisma client). **migrate는 쓰지 않는다**
+5. `pnpm test:generate` (Prisma client). **migrate는 쓰지 않는다**
 
 `ANDROID_HOME`과 `JAVA_HOME`이 비어 있으면 Windows의 Android Studio 기본 자리를 쓴다(`wdio.conf.ts`).
 
@@ -37,15 +37,24 @@
 
 | 명령 (루트에서) | 하는 일 |
 | --- | --- |
-| `pnpm e2e` | 열 개를 차례대로 |
-| `pnpm exec wdio run wdio.conf.ts --spec tests/e2e/003-transfer.spec.ts` | 하나만 |
-| `pnpm e2e:types` | 타입 검사 |
-| `node tests/e2e/check-header.mjs` | 모든 spec의 공통 머리말이 원본과 같은지 |
+| `pnpm test` | 준비를 점검하고 열 개를 차례대로 |
+| `pnpm test --spec 003` | 이름에 003이 든 것만 |
+| `pnpm test --spec 002 --spec 003` | 둘만 |
+| `pnpm test:run` | **정식 실행.** 번호 서버에서 번호와 값을 받아 전부 돌리고, 끝나면 알린다 |
+| `pnpm test:types` | 타입 검사 |
+| `pnpm app:test` | 앱 안의 테스트(Dart). 기기가 필요 없다 |
 
+- 준비가 안 됐으면 **무엇이 빠졌는지 알려 주고 시작하지 않는다** (`preflight.ts`).
 - 시험마다 **기기에 깔린 이 앱의 데이터를 비운다.** 시험용 앱이 깔린 기기에서만 돌린다.
 - 시험이 만든 사용자와 거래는 개발 DB에 남는다(지우는 API가 없다). 계좌는 끝날 때 지운다.
 - 내 PC가 아닌 서버는 `E2E_ALLOW_REMOTE=1`이 있을 때만 쓴다. DB는 내 PC의 것만 본다.
 - 실패하면 화면 사진과 화면 구조를 `logs/`에 남긴다(커밋하지 않음).
+
+## 정식 실행
+
+- 시작 전에 번호 서버에 이름표가 다 있는지 본다. 없으면 **번호를 열지 않고** 멈춘다. 지금 서버에는 006~009의 이름표(`user-settings`, `transaction-visibility`, `notifications`, `login-logout`)가 없어 아직 돌지 않는다.
+- 실패한 시험이 있어도 끝까지 돌았으면 finish, 중간에 멈추면 block(그 번호는 무효)이다. 신호는 시험이 끝날 때마다 보낸다.
+- 시작과 끝의 규칙은 가짜 번호 서버로 확인했다. **진짜 번호 서버에는 아직 돌려 보지 않았다.** 결과 기록(`code_result`)은 서버에 API가 없어 하지 않는다.
 
 ## 버전의 짝
 
@@ -53,4 +62,4 @@
 
 ## 아직 없는 것
 
-번호를 받는 정식 실행과 결과 기록, 중계기(알림 99개, 통신 붙잡기), 실제 폰과 release 앱의 확인.
+결과 기록, 중계기(알림 99개, 통신 붙잡기), 실제 폰과 release 앱의 확인.

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { browser } from "@wdio/globals";
 import { closeDb } from "./tests/e2e/db/client";
@@ -22,6 +22,19 @@ const printSteps = () => {
       `${"  ".repeat(item.depth)}[${item.kind}] ${item.name} ${item.status} ${item.durationMs}ms`
     );
   }
+};
+
+// 정식 실행(test-run.ts)이면 시험이 하나 끝날 때마다 번호 서버에 살아 있다고 알린다. 알리지 못해도 시험은 계속한다
+const tellAlive = async (title: string) => {
+  const { TEST_RUN_NO, TEST_RUN_SERVER, TEST_RUN_SECRET, TEST_RUN_DONE_FILE } = process.env;
+  if (!TEST_RUN_NO || !TEST_RUN_DONE_FILE) return;
+  appendFileSync(TEST_RUN_DONE_FILE, `${title}\n`);
+  await fetch(`${TEST_RUN_SERVER}/api/testRuns/${TEST_RUN_NO}/signal`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${TEST_RUN_SECRET ?? ""}` },
+    body: JSON.stringify({ platform: "app" }),
+    signal: AbortSignal.timeout(10_000),
+  }).catch(() => undefined);
 };
 
 export const config = {
@@ -54,6 +67,7 @@ export const config = {
     result: { passed: boolean }
   ) => {
     printSteps();
+    await tellAlive(test.title);
     if (result.passed) return;
     mkdirSync(LOGS, { recursive: true });
     const name = join(LOGS, `${Date.now()}-${test.title.slice(0, 20).replace(/[^0-9A-Za-z가-힣]/g, "_")}`);
