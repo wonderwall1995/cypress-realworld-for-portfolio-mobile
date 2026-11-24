@@ -121,7 +121,8 @@ class HomeShell extends ConsumerWidget {
     );
     return NotificationLiveSync(
       child: Scaffold(
-        body: navigationShell,
+        // Left and right too: turned sideways, the phone's own buttons are there.
+        body: SafeArea(top: false, bottom: false, child: navigationShell),
         bottomNavigationBar: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -205,52 +206,55 @@ class HomeShell extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.person_outline)),
-              title: TestId('sidenav-user-full-name', child: Text(fullName, maxLines: 1, overflow: TextOverflow.ellipsis)),
-              subtitle: TestId(
-                'sidenav-username',
-                child: Text(username == null ? '' : '@$username'),
+        // A turned phone is lower than the menu.
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const CircleAvatar(child: Icon(Icons.person_outline)),
+                title: TestId('sidenav-user-full-name', child: Text(fullName, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                subtitle: TestId(
+                  'sidenav-username',
+                  child: Text(username == null ? '' : '@$username'),
+                ),
               ),
-            ),
-            const Divider(height: 1),
-            TestId(
-              'sidenav-user-settings',
-              child: ListTile(
-                leading: const Icon(Icons.settings_outlined),
-                title: const Text('설정'),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  context.push('/settings');
-                },
+              const Divider(height: 1),
+              TestId(
+                'sidenav-user-settings',
+                child: ListTile(
+                  leading: const Icon(Icons.settings_outlined),
+                  title: const Text('설정'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    context.push('/settings');
+                  },
+                ),
               ),
-            ),
-            TestId(
-              'sidenav-about',
-              child: ListTile(
-                leading: const Icon(Icons.info_outline),
-                title: const Text('앱 정보'),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  context.push('/about');
-                },
+              TestId(
+                'sidenav-about',
+                child: ListTile(
+                  leading: const Icon(Icons.info_outline),
+                  title: const Text('앱 정보'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    context.push('/about');
+                  },
+                ),
               ),
-            ),
-            TestId(
-              'sidenav-signout',
-              child: ListTile(
-                leading: const Icon(Icons.logout),
-                title: const Text('로그아웃'),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  ref.read(sessionProvider.notifier).signOut();
-                },
+              TestId(
+                'sidenav-signout',
+                child: ListTile(
+                  leading: const Icon(Icons.logout),
+                  title: const Text('로그아웃'),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    ref.read(sessionProvider.notifier).signOut();
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

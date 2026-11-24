@@ -13,7 +13,6 @@ const bankAccountDemoNotice = '진짜 자신의 계좌를 만들진 말아주세
 
 /// Text that other people can read.
 const memoDemoNotice = '메모는 다른 사람에게 보일 수 있습니다. 개인 정보는 넣지 마세요.';
-const commentDemoHint = '댓글 (개인 정보는 넣지 마세요)';
 
 /// A short notice above a form. It is not an error, so it is not red.
 class DemoNotice extends StatelessWidget {

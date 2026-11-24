@@ -168,16 +168,12 @@ void main() {
 
       expect(byId('transaction-confirm-dialog'), findsOneWidget);
       expect(find.text('정말 이체하겠습니까?'), findsOneWidget);
-      expect(find.text('자신의 계정 비밀번호를 입력해주세요.'), findsOneWidget);
+      expect(find.text('계정의 비밀번호를 입력해주세요.'), findsOneWidget);
       expect(find.text('이 데모 앱의 비밀번호'), findsOneWidget);
       final summary = tester
-          .widget<Text>(find.descendant(of: byId('transaction-confirm-summary'), matching: find.byType(Text)))
-          .data!
-          .split('\n');
-      expect(summary, [
-        'First Bank ····6789 → Test Bob님 Other Bank ····5555',
-        '\$25',
-      ]);
+          .widgetList<Text>(find.descendant(of: byId('transaction-confirm-summary'), matching: find.byType(Text)))
+          .map((t) => t.data);
+      expect(summary, ['First Bank ····6789', 'Test Bob님 Other Bank ····5555', '\$25']);
 
       await tapId(tester, 'transaction-confirm-cancel');
 

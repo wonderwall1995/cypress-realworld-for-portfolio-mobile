@@ -11,7 +11,7 @@ import 'other_account.dart';
 /// Only the bank NAME is cut with "…" when the line is too short; the digits and the
 /// balance are always whole. The balance goes to a second line when it has to.
 class _AccountLine extends StatelessWidget {
-  const _AccountLine({required this.id, required this.bankName, required this.last4, this.balance});
+  const _AccountLine({required this.id, required this.bankName, required this.last4, this.balance, this.canSend = false});
 
   final String id;
   final String bankName;
@@ -19,6 +19,9 @@ class _AccountLine extends StatelessWidget {
 
   /// In cents.
   final int? balance;
+
+  /// The balance is green: there is money to send, and enough of it.
+  final bool canSend;
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +38,13 @@ class _AccountLine extends StatelessWidget {
       ],
     );
     if (balance == null) return number;
-    final money = TestId('$id-balance', child: Text('잔액 ${formatUsd(balance!)}'));
+    final money = TestId(
+      '$id-balance',
+      child: Text(
+        '잔액 ${formatUsd(balance!)}',
+        style: canSend ? TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.w700) : null,
+      ),
+    );
     // Wrap, not Row: when the line is too short, the balance goes to a second line
     // and stays whole.
     return SizedBox(
@@ -103,6 +112,7 @@ class MyAccountPicker extends StatelessWidget {
                         bankName: account.bankName,
                         last4: account.last4,
                         balance: account.balance,
+                        canSend: (account.balance ?? 0) > 0 && isEnough(account, requiredCents),
                       ),
                       contentPadding: EdgeInsets.zero,
                     ),

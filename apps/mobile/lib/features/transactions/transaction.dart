@@ -1,11 +1,11 @@
-/// A comment on a transaction. (The server sends the text and the author's id,
-/// not the author's name.)
+/// A comment on a transaction.
 class TransactionComment {
   const TransactionComment({
     required this.id,
     required this.content,
     required this.userId,
     required this.createdAt,
+    this.userFullName,
   });
 
   factory TransactionComment.fromJson(Map<String, dynamic> json) => TransactionComment(
@@ -13,12 +13,17 @@ class TransactionComment {
         content: json['content'] as String? ?? '',
         userId: json['userId'] as String? ?? '',
         createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+        userFullName: json['userFullName'] as String?,
       );
 
   final String id;
   final String content;
   final String userId;
   final DateTime? createdAt;
+
+  /// Who wrote it ("성 이름"); empty when the server does not know. Null from a server
+  /// that does not send it yet.
+  final String? userFullName;
 }
 
 /// The sender of an "외부 입금" (a deposit into a bank account). The server makes
@@ -58,6 +63,7 @@ class Transaction {
     this.createdAt,
     this.source,
     this.myAccount,
+    this.privacyLevel,
   });
 
   factory Transaction.fromJson(Map<String, dynamic> json) {
@@ -84,6 +90,7 @@ class Transaction {
       myAccount: json['myAccount'] is Map<String, dynamic>
           ? MyAccountInfo.fromJson(json['myAccount'] as Map<String, dynamic>)
           : null,
+      privacyLevel: json['privacyLevel'] as String?,
     );
   }
 
@@ -111,6 +118,10 @@ class Transaction {
 
   /// The user's own bank account in this transaction (null when it is not theirs).
   final MyAccountInfo? myAccount;
+
+  /// Who can see it: `public`, `private` (or the old `contacts`). Null when the
+  /// server does not say.
+  final String? privacyLevel;
 
   /// When the payment or deposit was made. Missing if the server does not say.
   final DateTime? createdAt;

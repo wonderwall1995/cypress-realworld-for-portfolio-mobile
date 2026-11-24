@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/session.dart';
 import '../../core/test_id.dart';
+import '../settings/privacy.dart';
 import 'transaction.dart';
 
 /// A round avatar with the first letter of the name. (The server sends no
@@ -239,6 +240,38 @@ class TransactionAmountText extends ConsumerWidget {
         '$sign${formatUsd(transaction.amount)}',
         style: style?.copyWith(color: color, fontWeight: FontWeight.w600),
       ),
+    );
+  }
+}
+
+/// "공개" or "비공개": who can see this transfer. Only on the user's own transfers,
+/// and only when the server says it. (An external deposit is always private.)
+class TransactionPrivacy extends ConsumerWidget {
+  const TransactionPrivacy(this.transaction, {super.key});
+
+  final Transaction transaction;
+
+  static bool isShown(Transaction t, String? userId) =>
+      t.privacyLevel != null && !t.isExternalDeposit && (t.senderId == userId || t.receiverId == userId);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final me = ref.watch(sessionProvider.select((s) => s.user?['id'])) as String?;
+    if (!isShown(transaction, me)) return const SizedBox.shrink();
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final public = privacyOf(transaction.privacyLevel) == 'public';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(public ? Icons.public : Icons.lock_outline, size: 16, color: muted),
+        const SizedBox(width: 4),
+        Flexible(
+          child: TestId(
+            'transaction-privacy-${transaction.id}',
+            child: Text(privacyLabel(transaction.privacyLevel)),
+          ),
+        ),
+      ],
     );
   }
 }

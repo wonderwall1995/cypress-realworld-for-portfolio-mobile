@@ -236,20 +236,33 @@ class _TransactionTile extends ConsumerWidget {
                       const SizedBox(height: 4),
                       BankMoveSentence(id: transaction.id, bankName: bankName, deposit: received ?? true),
                     ],
-                    if (!transaction.isExternalDeposit) ...[
+                    if (!transaction.isExternalDeposit && transaction.description.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(transaction.description),
                     ],
                     const SizedBox(height: 6),
-                    Row(
+                    // Wrap, not Row: on a narrow phone 공개/비공개 goes to a second line.
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 4,
                       children: [
-                        Icon(Icons.thumb_up_outlined, size: 16, color: muted),
-                        const SizedBox(width: 4),
-                        TestId('transaction-like-count', child: Text('${transaction.likeCount}')),
-                        const SizedBox(width: 16),
-                        Icon(Icons.chat_bubble_outline, size: 16, color: muted),
-                        const SizedBox(width: 4),
-                        TestId('transaction-comment-count', child: Text('${transaction.commentCount}')),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.thumb_up_outlined, size: 16, color: muted),
+                            const SizedBox(width: 4),
+                            TestId('transaction-like-count', child: Text('${transaction.likeCount}')),
+                          ],
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.chat_bubble_outline, size: 16, color: muted),
+                            const SizedBox(width: 4),
+                            TestId('transaction-comment-count', child: Text('${transaction.commentCount}')),
+                          ],
+                        ),
+                        TransactionPrivacy(transaction),
                       ],
                     ),
                   ],

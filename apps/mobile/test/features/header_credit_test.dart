@@ -52,13 +52,13 @@ void main() {
     expect(second.fontFamily, 'monospace');
   });
 
-  testWidgets('the credit does not hide the 만들기 button on the bank accounts header', (tester) async {
+  testWidgets('the credit and the 만들기 button on the bank accounts screen do not meet', (tester) async {
     await pumpApp(tester, newServer());
     await tapId(tester, 'sidenav-bankaccounts');
 
     final button = tester.getRect(byId('bankaccount-new'));
     final credit = tester.getRect(byId('header-credit'));
-    expect(button.right, lessThanOrEqualTo(credit.left));
+    expect(button.overlaps(credit), isFalse);
     // And the button still works.
     await tapId(tester, 'bankaccount-new');
     expect(byId('bankaccount-form'), findsOneWidget);

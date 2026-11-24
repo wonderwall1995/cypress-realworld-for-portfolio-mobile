@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
-import '../../core/demo_notice.dart';
 import '../../core/error_text.dart';
+import '../../core/person_name.dart';
 import '../../core/providers.dart';
 import '../../core/session.dart';
 import '../../core/test_id.dart';
+import 'create/create_transaction_controller.dart';
+import 'create/user_summary.dart';
 import 'transaction.dart';
 import 'transaction_feed_controller.dart';
 import 'transaction_widgets.dart';
@@ -26,28 +28,33 @@ class TransactionDetailPage extends ConsumerWidget {
       appBar: AppBar(
         title: const TestId('transaction-detail-header', child: Text('거래 상세')),
       ),
-      body: detail.when(
-        skipLoadingOnReload: true,
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => error is ApiException && error.statusCode == 404
-            ? const _NotFound()
-            : Center(
-          child: TestId(
-            'transaction-detail-error',
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('거래를 불러오지 못했습니다.'),
-                const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: () => ref.invalidate(transactionDetailProvider(transactionId)),
-                  child: const Text('다시 시도'),
+      // The bottom is the comment field's own matter.
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: detail.when(
+          skipLoadingOnReload: true,
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => error is ApiException && error.statusCode == 404
+              ? const _NotFound()
+              : Center(
+                child: TestId(
+                  'transaction-detail-error',
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('거래를 불러오지 못했습니다.'),
+                      const SizedBox(height: 12),
+                      OutlinedButton(
+                        onPressed: () => ref.invalidate(transactionDetailProvider(transactionId)),
+                        child: const Text('다시 시도'),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
-          ),
+              ),
+          data: (transaction) => _DetailBody(transaction: transaction),
         ),
-        data: (transaction) => _DetailBody(transaction: transaction),
       ),
     );
   }
@@ -161,15 +168,21 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                     ),
                     const SizedBox(height: 16),
                     TransactionTitleLine(transaction),
-                    const SizedBox(height: 12),
-                    TestId(
-                      'transaction-description',
-                      child: Text(transaction.description, style: theme.textTheme.bodyLarge),
-                    ),
+                    if (transaction.description.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      TestId(
+                        'transaction-description',
+                        child: Text(transaction.description, style: theme.textTheme.bodyLarge),
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     TransactionAmountText(transaction, large: true),
                     const SizedBox(height: 8),
                     TestId('transaction-status', child: Text(transaction.statusLabel)),
+                    if (TransactionPrivacy.isShown(transaction, currentUserId)) ...[
+                      const SizedBox(height: 8),
+                      TransactionPrivacy(transaction),
+                    ],
                     const SizedBox(height: 8),
                     Row(
                       children: [
@@ -178,10 +191,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                           child: IconButton(
                             tooltip: '좋아요',
                             onPressed: (liked || _busy) ? null : _like,
-                            // Like the web: the same outline before and after; after it the
-                            // button is off (grey).
-                            color: theme.colorScheme.primary,
-                            icon: const Icon(Icons.thumb_up_outlined),
+                            // Highlighted only when the user liked it. (Then it is off: there
+                            // is one like per user.)
+                            color: muted,
+                            disabledColor: liked ? theme.colorScheme.primary : null,
+                            icon: Icon(liked ? Icons.thumb_up : Icons.thumb_up_outlined),
                           ),
                         ),
                         TestId(
@@ -202,7 +216,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                     const SizedBox(height: 12),
                     Text('댓글 ${transaction.commentCount}', style: theme.textTheme.titleSmall),
                     const SizedBox(height: 8),
-                    _CommentList(comments: transaction.comments),
+                    _CommentList(transaction: transaction),
                   ],
                 ),
               ),
@@ -215,10 +229,14 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   }
 }
 
-class _CommentList extends StatelessWidget {
-  const _CommentList({required this.comments});
+class _CommentList extends ConsumerWidget {
+  const _CommentList({required this.transaction});
 
-  final List<TransactionComment> comments;
+  final Transaction transaction;
+
+  /// The room for a name is as wide as this; a longer name ends with "…". So the
+  /// times of all comments start at the same place.
+  static const _nameRoom = 'jwfdoiabcdefghijk';
 
   /// For example `11/10 18:51`, in the phone's time zone.
   static String _time(DateTime? t) {
@@ -228,11 +246,40 @@ class _CommentList extends StatelessWidget {
     return '${local.month}/${local.day} ${two(local.hour)}:${two(local.minute)}';
   }
 
+  /// Who wrote which comment, for a server that sends only the id of the author: the
+  /// name comes from the user and the two people of the transaction, and for anybody
+  /// else from the list of users.
+  Map<String, String> _names(WidgetRef ref) {
+    final me = ref.watch(sessionProvider.select((s) => s.user));
+    final names = {
+      transaction.senderId: transaction.senderName,
+      transaction.receiverId: transaction.receiverName,
+      if (me?['id'] case final String id)
+        id: koreanFullName(firstName: me?['firstName'] as String?, lastName: me?['lastName'] as String?),
+    };
+    if (transaction.comments.every((c) => c.userFullName != null || names.containsKey(c.userId))) return names;
+    final users = ref.watch(usersProvider('')).value ?? const <UserSummary>[];
+    return {for (final user in users) user.id: user.fullName, ...names};
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final comments = transaction.comments;
     if (comments.isEmpty) {
       return const TestId('comments-empty', child: Text('아직 댓글이 없습니다.'));
     }
+    final theme = Theme.of(context);
+    final names = _names(ref);
+    final small = theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    final text = theme.textTheme.bodyMedium;
+    final painter = TextPainter(
+      text: TextSpan(text: _nameRoom, style: small),
+      textDirection: TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final nameWidth = painter.width.ceilToDouble();
+    painter.dispose();
     return TestId(
       'comments-list',
       child: Column(
@@ -246,12 +293,30 @@ class _CommentList extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(comment.content),
-                    Text(
-                      _time(comment.createdAt),
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    Text(comment.content, style: text?.copyWith(fontSize: (text.fontSize ?? 14) + 2)),
+                    const SizedBox(height: 6),
+                    // Wrap, not Row: with very big letters the time goes to a second line.
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        SizedBox(
+                          width: nameWidth,
+                          child: TestId(
+                            'comment-author-${comment.id}',
+                            child: Text(
+                              comment.userFullName ?? names[comment.userId] ?? '',
+                              semanticsLabel: comment.userFullName ?? names[comment.userId] ?? '',
+                              style: small,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
+                        ),
+                        TestId(
+                          'comment-time-${comment.id}',
+                          child: Text(_time(comment.createdAt), style: small),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -326,9 +391,7 @@ class _CommentInputState extends ConsumerState<_CommentInput> {
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _send(),
                     decoration: const InputDecoration(
-                      // No room for a notice above it when the keyboard is open.
-                      hintText: commentDemoHint,
-                      hintMaxLines: 2,
+                      hintText: '댓글',
                       border: OutlineInputBorder(),
                       isDense: true,
                     ),
