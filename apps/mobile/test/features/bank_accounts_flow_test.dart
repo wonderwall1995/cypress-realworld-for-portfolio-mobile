@@ -64,7 +64,7 @@ void main() {
     testWidgets('the menu still opens its tab when it is yellow', (tester) async {
       await pumpApp(tester, FakeServer(signedIn: true));
       await tapId(tester, 'sidenav-bankaccounts');
-      expect(find.text('등록된 은행 계좌가 없습니다.'), findsOneWidget);
+      expect(find.descendant(of: byId('bankaccount-list-empty'), matching: find.text('등록된 은행 계좌가 없습니다.')), findsOneWidget);
     });
 
     testWidgets('a list that cannot be read is not "no account"', (tester) async {

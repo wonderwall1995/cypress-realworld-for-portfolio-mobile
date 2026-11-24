@@ -63,7 +63,9 @@ class BankAccountsPage extends ConsumerWidget {
               ),
             Expanded(
               child: list.isEmpty
-                  ? const Center(child: Text('등록된 은행 계좌가 없습니다.'))
+                  ? const Center(
+                      child: TestId('bankaccount-list-empty', child: Text('등록된 은행 계좌가 없습니다.')),
+                    )
                   : TestId(
                       'bankaccount-list',
                       child: ListView.separated(

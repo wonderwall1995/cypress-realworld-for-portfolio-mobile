@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
+import '../../core/form_check.dart';
 import '../../core/providers.dart';
 import '../../core/test_id.dart';
 import '../auth/auth_widgets.dart';
@@ -63,7 +64,7 @@ class _DepositDialogState extends ConsumerState<DepositDialog> {
   Future<void> _submit() async {
     // A second tap in the same frame must not send a second request.
     if (_busy || _unknown) return;
-    if (!_formKey.currentState!.validate()) return;
+    if (!checkForm(_formKey)) return;
     final dollars = int.parse(_amount.text.trim());
     final bankAccounts = ref.read(bankAccountsProvider).value ?? const <BankAccount>[];
     final accountId = _selectedId(bankAccounts);

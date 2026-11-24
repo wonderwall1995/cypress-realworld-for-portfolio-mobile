@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_client.dart';
 import '../../core/demo_notice.dart';
+import '../../core/form_check.dart';
 import '../../core/error_text.dart';
 import '../../core/providers.dart';
 import '../../core/session.dart';
@@ -75,7 +76,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Future<void> _save() async {
     // A second tap in the same frame must not send a second request.
     if (_busy) return;
-    if (!_formKey.currentState!.validate()) return;
+    if (!checkForm(_formKey)) return;
     final userId = ref.read(sessionProvider).user?['id'] as String?;
     if (userId == null) return;
     setState(() {

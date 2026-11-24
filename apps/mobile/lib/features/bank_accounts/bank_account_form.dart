@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/api_client.dart';
 import '../../core/demo_notice.dart';
+import '../../core/form_check.dart';
 import '../../core/error_text.dart';
 import '../../core/test_id.dart';
 import '../auth/auth_widgets.dart';
@@ -50,7 +51,7 @@ class _BankAccountFormState extends State<BankAccountForm> {
   Future<void> _submit() async {
     // A second tap (or the keyboard's done key) in the same frame sends nothing.
     if (_busy) return;
-    if (!_formKey.currentState!.validate()) return;
+    if (!checkForm(_formKey)) return;
     setState(() {
       _busy = true;
       _error = null;

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/api_client.dart';
 import '../../../core/demo_notice.dart';
+import '../../../core/form_check.dart';
 import '../../../core/test_id.dart';
 import '../../auth/auth_widgets.dart';
 import '../../bank_accounts/account_pickers.dart';
@@ -264,7 +265,7 @@ class _PaymentStepState extends ConsumerState<_PaymentStep> {
     final others =
         ref.read(otherAccountsProvider(widget.receiver.id)).value ??
         const <OtherAccount>[];
-    final formOk = _formKey.currentState!.validate();
+    final formOk = checkForm(_formKey);
     final myId = _selectedMine(mine);
     final otherId = _selectedOther(others);
     final cents = _amountCents;
