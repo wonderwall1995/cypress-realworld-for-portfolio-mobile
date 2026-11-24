@@ -1,6 +1,6 @@
 import { basename } from "node:path";
 
-/** 도구 하나의 결과. 정식 실행이면 시험의 결과와 함께 서버로 간다 (code_result 의 종류와 같은 이름을 쓴다) */
+/** 도구 하나의 결과. 정식 실행이면 시험의 결과와 함께 서버로 간다 (app_test_record 의 종류와 같은 이름을 쓴다) */
 export interface StepRecord {
   kind: "common" | "api" | "fixture";
   name: string;
