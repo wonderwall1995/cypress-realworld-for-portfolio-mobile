@@ -30,6 +30,21 @@ Future<void> typeDay(WidgetTester tester, String box, String year, String month,
   await enter(tester, _id(box, 'day'), day);
 }
 
+/// Presses digit keys one at a time, each into the field that has the cursor at that moment (as a person does).
+Future<void> pressKeys(WidgetTester tester, String box, String digits) async {
+  await tester.tap(fieldIn(_id(box, 'year')));
+  await tester.pump();
+  for (final key in digits.split('')) {
+    final focused = tester
+        .stateList<EditableTextState>(find.byType(EditableText))
+        .singleWhere((state) => state.widget.focusNode.hasFocus);
+    final text = focused.textEditingValue.text + key;
+    focused.updateEditingValue(TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length)));
+    await tester.pump();
+    await tester.pump();
+  }
+}
+
 /// The date filter is applied a moment (400 ms) after the boxes are right.
 Future<void> waitForApply(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 500));
@@ -289,6 +304,20 @@ void main() {
       expect(node.hasFocus, isTrue);
       await tester.pump(const Duration(milliseconds: 500));
     });
+
+    for (final day in ['2025-11-24', '2025-03-07', '2025-10-10', '2025-12-31', '2026-01-01']) {
+      testWidgets('$day typed key by key stays $day in the boxes and in the request', (tester) async {
+        final server = newServer();
+        await pumpApp(tester, server);
+        final [year, month, date] = day.split('-');
+
+        await pressKeys(tester, 'start', '$year$month$date');
+        await waitForApply(tester);
+
+        expect([for (final part in ['year', 'month', 'day']) textOf(tester, _id('start', part))], [year, month, date]);
+        expect(DateTime.parse(lastQuery(server)['dateRangeStart'] as String).toLocal(), DateTime(int.parse(year), int.parse(month), int.parse(date)));
+      });
+    }
 
     testWidgets('a wrong box is marked, the other box is not', (tester) async {
       await pumpApp(tester, newServer());

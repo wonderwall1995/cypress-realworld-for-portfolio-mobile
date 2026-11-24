@@ -3,6 +3,7 @@
 // - 전체만 돌린다. 일부만 돌리려면 pnpm test --spec 003 을 쓴다 (번호를 받지 않는다).
 // - 실패한 시험이 있어도 끝까지 돌았으면 finish 다. 중간에 멈추면 block 이다 (그 번호는 무효가 된다).
 // - 결과는 시험이 하나 끝날 때마다 wdio.conf.ts 가 보낸다 (신호를 겸한다. 10분 동안 없으면 서버가 block 으로 바꾼다).
+// - 번호를 받은 뒤에는 무엇이 잘못돼도 finish 나 block 으로 끝낸다 (열린 채 두면 웹까지 기다린다).
 // - 끝나기 직전에 결과를 모두 한 번 더 보낸다. 하나라도 저장되지 않으면 finish 대신 block 이다 (빠진 결과는 믿을 수 없다).
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
@@ -16,6 +17,7 @@ if (existsSync(join(HERE, ".env"))) process.loadEnvFile(join(HERE, ".env"));
 
 const SERVER = process.env.TEST_RUN_SERVER ?? process.env.E2E_API_URL ?? "http://127.0.0.1:7202";
 const SECRET = process.env.TEST_RUN_SECRET ?? "";
+const DEVICE = process.env.TEST_RUN_DEVICE || "rwa-mobile"; // 번호 서버에 남는 기기 이름
 const RESULTS_FILE = join(HERE, "logs", "test-run-results.jsonl"); // 끝난 시험의 결과를 한 줄씩 적는 곳. 커밋하지 않는다
 
 const stop = (message: string): never => {
@@ -64,15 +66,14 @@ if (!running.target) console.log("깔린 앱의 버전을 알 수 없습니다 (
 else if (running.target !== appSourceFingerprint()) console.log("깔린 앱이 지금의 앱 소스로 만든 것이 아닙니다. 깔린 앱의 버전으로 기록합니다.");
 
 // 번호를 열거나 합류한다
-const started = await ask("", { platform: "app", device: "android-emulator", code: running });
+const started = await ask("", { platform: "app", device: DEVICE, code: running });
 if (!started || ![200, 201].includes(started.status)) stop(`번호를 받지 못했습니다 (${started?.status ?? "연결 안 됨"}).`);
 const run: {
   runNo: number;
-  opened: boolean;
-  versions: { server: string; target: string | null };
+  opened?: boolean;
+  versions?: { server?: string; target?: string | null }; // 버전을 모르는 서버는 주지 않는다
   fixtures: Record<string, Record<string, string>>;
 } = await started!.json();
-console.log(`실행 번호 ${run.runNo} (${run.opened ? "새로 열었음" : "합류했음"}), 서버 ${run.versions.server}, 앱 ${run.versions.target ?? "모름"}`);
 
 const tell = async (event: "finish" | "block") => {
   const answer = await ask(`/${run.runNo}/${event}`, { platform: "app" });
@@ -82,41 +83,52 @@ const tell = async (event: "finish" | "block") => {
       : `실행 번호 ${run.runNo}: ${event} 를 알리지 못했습니다. 서버가 10분 뒤에 block 으로 바꿉니다.`
   );
 };
-if (missingFrom(run.fixtures).length > 0) {
-  await tell("block");
-  stop(`이 번호에 없는 이름표: ${missingFrom(run.fixtures).join(", ")}. 웹 저장소의 test-fixture-rules.ts 에 더해야 합니다.`);
-}
+try {
+  console.log(
+    `실행 번호 ${run.runNo} (${run.opened ? "새로 열었음" : "합류했음"}), 기기 ${DEVICE}, 서버 ${run.versions?.server ?? "모름"}, 앱 ${run.versions?.target ?? "모름"}`
+  );
+  if (missingFrom(run.fixtures).length > 0) {
+    throw new Error(`이 번호에 없는 이름표: ${missingFrom(run.fixtures).join(", ")}. 웹 저장소의 test-fixture-rules.ts 에 더해야 합니다.`);
+  }
 
-// 시험을 돌린다. 값에는 비밀번호가 있으므로 화면에 찍지 않고 환경 값으로만 넘긴다
-const child = spawn("npx", ["wdio", "run", "wdio.conf.ts"], {
-  cwd: ROOT,
-  stdio: "inherit",
-  shell: true,
-  env: {
-    ...process.env,
-    TEST_RUN_FIXTURES: JSON.stringify(run.fixtures),
-    TEST_RUN_NO: String(run.runNo),
-    TEST_RUN_SERVER: SERVER,
-    TEST_RUN_RESULTS_FILE: RESULTS_FILE,
-  },
-});
-let stopped = false;
-for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.on(signal, () => {
-    stopped = true;
-    child.kill(signal);
+  // 시험을 돌린다. 값에는 비밀번호가 있으므로 화면에 찍지 않고 환경 값으로만 넘긴다
+  const child = spawn("npx", ["wdio", "run", "wdio.conf.ts"], {
+    cwd: ROOT,
+    stdio: "inherit",
+    shell: true,
+    env: {
+      ...process.env,
+      TEST_RUN_FIXTURES: JSON.stringify(run.fixtures),
+      TEST_RUN_NO: String(run.runNo),
+      TEST_RUN_SERVER: SERVER,
+      TEST_RUN_RESULTS_FILE: RESULTS_FILE,
+    },
   });
-}
-const code = await new Promise<number>((resolve) => child.on("close", (value) => resolve(value ?? 1)));
+  let stopped = false;
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.on(signal, () => {
+      stopped = true;
+      child.kill(signal);
+    });
+  }
+  const code = await new Promise<number>((resolve, reject) => {
+    child.on("close", (value) => resolve(value ?? 1));
+    child.on("error", reject);
+  });
 
-// 시험이 모두 끝까지 돌았고(실패도 끝까지 돈 것이다), 결과가 모두 저장됐는가
-const outcomes = keptOutcomes(RESULTS_FILE);
-let missing = 0;
-for (const outcome of outcomes) {
-  if (!(await sendOutcome(SERVER, run.runNo, outcome))) missing += 1;
+  // 시험이 모두 끝까지 돌았고(실패도 끝까지 돈 것이다), 결과가 모두 저장됐는가
+  const outcomes = keptOutcomes(RESULTS_FILE);
+  let missing = 0;
+  for (const outcome of outcomes) {
+    if (!(await sendOutcome(SERVER, run.runNo, outcome))) missing += 1;
+  }
+  console.log(`결과 ${outcomes.length}개 가운데 저장된 것 ${outcomes.length - missing}개`);
+  const labelsDone = new Set(outcomes.map((outcome) => outcome.testCase));
+  const complete = !stopped && missing === 0 && labels.every((label) => labelsDone.has(label));
+  await tell(complete ? "finish" : "block");
+  process.exitCode = complete ? code : code || 1;
+} catch (error) {
+  console.error(`\n정식 실행을 멈췄습니다: ${error instanceof Error ? error.message : error}\n`);
+  await tell("block");
+  process.exitCode = 1;
 }
-console.log(`결과 ${outcomes.length}개 가운데 저장된 것 ${outcomes.length - missing}개`);
-const labelsDone = new Set(outcomes.map((outcome) => outcome.testCase));
-const complete = !stopped && missing === 0 && labels.every((label) => labelsDone.has(label));
-await tell(complete ? "finish" : "block");
-process.exitCode = complete ? code : code || 1;

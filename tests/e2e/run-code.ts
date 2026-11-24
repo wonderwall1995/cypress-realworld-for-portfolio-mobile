@@ -9,7 +9,8 @@ import { join } from "node:path";
 export const ROOT = join(import.meta.dirname, "..", "..");
 const APP = "io.github.wonderwall1995.cypress_realworld_for_personal_portfolio_mobile";
 const APP_SOURCES = ["apps/mobile/lib", "apps/mobile/android", "apps/mobile/pubspec.yaml", "apps/mobile/pubspec.lock"];
-const TEST_SOURCES = ["tests/e2e", "wdio.conf.ts", "package.json"];
+// 잠금 파일도 본다: 도구의 버전이 바뀌면 같은 시험이 아니다
+const TEST_SOURCES = ["tests/e2e", "wdio.conf.ts", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml"];
 
 const git = (...args: string[]) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8", timeout: 15_000 }).trim();
 
