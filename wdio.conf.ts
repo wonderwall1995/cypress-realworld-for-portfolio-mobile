@@ -7,7 +7,7 @@ import { StepRecord, takeStepRecords } from "./tests/e2e/fixture/step";
 
 const E2E = join(__dirname, "tests", "e2e");
 
-// 커밋하지 않는 값 (E2E_API_URL, E2E_DATABASE_URL). 루트의 .env 에 두지 않는다: 그 파일은 앱 빌드에 통째로 들어간다
+// 커밋하지 않는 값 (E2E_API_URL, E2E_DATABASE_URL). 루트의 .env 는 앱 빌드에 넘기는 값만 두는 곳이라 따로 둔다
 if (existsSync(join(E2E, ".env"))) process.loadEnvFile(join(E2E, ".env"));
 
 // 이 PC의 자리. 환경 값이 있으면 그것을 쓴다
