@@ -7,13 +7,14 @@
     "app:analyze": "cd apps/mobile && flutter analyze",
     "app:test": "cd apps/mobile && flutter test",
     "app:run": "cd apps/mobile && flutter run --dart-define-from-file=../../.env",
-    "device:start": "powershell -NoProfile -Command \"Start-Process -WindowStyle Hidden -FilePath \\\"$env:LOCALAPPDATA/Android/Sdk/emulator/emulator.exe\\\" -ArgumentList '-avd','pixel'\" && adb start-server && adb wait-for-device && adb shell \"while [ -z \\\"$(getprop sys.boot_completed)\\\" ]; do sleep 2; done\"",
+    "device:start": "powershell -NoProfile -Command \"Start-Process -WindowStyle Hidden -FilePath \\\"$env:LOCALAPPDATA/Android/Sdk/emulator/emulator.exe\\\" -ArgumentList '-avd','pixel','-memory','4096'\" && adb start-server && adb wait-for-device && adb shell \"while [ -z \\\"$(getprop sys.boot_completed)\\\" ]; do sleep 2; done\"",
     "build": "cd apps/mobile && flutter build apk --debug --dart-define-from-file=../../.env",
     "start": "adb install -r apps/mobile/build/app/outputs/flutter-apk/app-debug.apk && adb shell am start -n io.github.wonderwall1995.cypress_realworld_for_personal_portfolio_mobile/.MainActivity",
     "device:stop": "adb shell am force-stop io.github.wonderwall1995.cypress_realworld_for_personal_portfolio_mobile & adb emu kill",
-    "e2e": "node tests/e2e/check-header.mjs && wdio run wdio.conf.ts",
-    "e2e:types": "tsc -p tests/e2e",
-    "e2e:generate": "prisma generate --schema tests/e2e/db/schema.prisma"
+    "test": "node tests/e2e/check-header.mjs && tsx tests/e2e/preflight.ts && wdio run wdio.conf.ts",
+    "test:types": "tsc -p tests/e2e",
+    "test:generate": "prisma generate --schema tests/e2e/db/schema.prisma",
+    "test:run": "tsx tests/e2e/test-run.ts"
   },
   "devDependencies": {
     "@prisma/client": "6.19.3",
