@@ -34,7 +34,7 @@ const ask = async (path: string, body?: object) => {
 if (process.argv.length > 2) stop("정식 실행은 언제나 전체를 돌립니다. 일부는 pnpm test --spec 003 처럼 돌리세요.");
 if (SECRET.length < 32) stop("TEST_RUN_SECRET 이 없습니다. tests/e2e/.env 에 넣으세요 (웹 서버의 값과 같은 값).");
 
-// 시험마다 쓰는 이름표. 서버에 없는 이름표가 있으면 번호를 열지 않는다
+// 시험마다 쓰는 이름표. 번호에 저장된 값만 보고 미리 막지 않는다: 서버가 합류할 때 새 이름표의 값을 채워 준다
 const specs = readdirSync(HERE).filter((file) => /^\d{3}-.*\.spec\.ts$/.test(file));
 const labels = specs.map((file) => /const LABEL = "([^"]+)"/.exec(readFileSync(join(HERE, file), "utf8"))?.[1] ?? "");
 const missingFrom = (fixtures: object) => labels.filter((label) => !(label in fixtures));
@@ -44,10 +44,6 @@ if (!list) stop("번호 서버에 닿지 않습니다.");
 if (list!.status === 404) stop("번호 서버의 기능이 닫혀 있습니다 (비밀 값이 없거나 prisma generate 가 필요합니다).");
 if (list!.status === 401) stop("TEST_RUN_SECRET 이 번호 서버의 값과 다릅니다.");
 if (list!.status !== 200) stop(`번호 서버의 답이 이상합니다 (${list!.status}).`);
-const latest = await (await ask("/latest"))?.json();
-if (latest?.runNo && missingFrom(latest.fixtures).length > 0) {
-  stop(`번호 서버에 없는 이름표: ${missingFrom(latest.fixtures).join(", ")}. 웹 저장소의 test-fixture-rules.ts 에 더해야 합니다.`);
-}
 
 for (const [command, ...args] of [
   ["node", join(HERE, "check-header.mjs")],
@@ -72,7 +68,7 @@ const tell = async (event: "finish" | "block") => {
 };
 if (missingFrom(run.fixtures).length > 0) {
   await tell("block");
-  stop(`이 번호에 없는 이름표: ${missingFrom(run.fixtures).join(", ")}`);
+  stop(`이 번호에 없는 이름표: ${missingFrom(run.fixtures).join(", ")}. 웹 저장소의 test-fixture-rules.ts 에 더해야 합니다.`);
 }
 
 // 시험을 돌린다. 값에는 비밀번호가 있으므로 화면에 찍지 않고 환경 값으로만 넘긴다
