@@ -62,7 +62,7 @@ import {
   expectEnabledOnScreen,
   expectHiddenOnScreen,
   expectRowCountOnScreen,
-  expectTextInsideOnScreen,
+  expectTextOnScreen,
 } from "./common/screen/expect-control";
 import { byId } from "./common/screen/find";
 import { scrollTo } from "./common/screen/scroll-to";
@@ -160,7 +160,7 @@ describe("1. 은행 계좌", () => {
     // 5) 대량(연속 삭제): API로 숨긴 행까지 모두 완전히 지우고, 화면은 빈 목록을 읽을 수 있는지만 본다
     await hardDeleteBankAccountsWithApi(A);
     await openBankAccounts();
-    await expectTextInsideOnScreen("android:id/content", "등록된 은행 계좌가 없습니다.");
+    await expectTextOnScreen("bankaccount-list-empty", "등록된 은행 계좌가 없습니다.");
     await expectRowCountOnScreen(ROW, 0);
     expect(await getBankAccountRowsWithApi(A)).toEqual({ total: 0, visible: 0, hidden: 0 });
   });
