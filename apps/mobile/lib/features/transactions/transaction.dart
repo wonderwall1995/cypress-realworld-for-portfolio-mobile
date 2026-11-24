@@ -1,11 +1,11 @@
-/// A comment on a transaction. (The server sends the text and the author's id,
-/// not the author's name.)
+/// A comment on a transaction.
 class TransactionComment {
   const TransactionComment({
     required this.id,
     required this.content,
     required this.userId,
     required this.createdAt,
+    this.userFullName,
   });
 
   factory TransactionComment.fromJson(Map<String, dynamic> json) => TransactionComment(
@@ -13,12 +13,17 @@ class TransactionComment {
         content: json['content'] as String? ?? '',
         userId: json['userId'] as String? ?? '',
         createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+        userFullName: json['userFullName'] as String?,
       );
 
   final String id;
   final String content;
   final String userId;
   final DateTime? createdAt;
+
+  /// Who wrote it ("성 이름"); empty when the server does not know. Null from a server
+  /// that does not send it yet.
+  final String? userFullName;
 }
 
 /// The sender of an "외부 입금" (a deposit into a bank account). The server makes

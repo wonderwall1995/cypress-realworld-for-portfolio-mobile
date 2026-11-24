@@ -57,6 +57,19 @@ void main() {
       expect(textOf(tester, 'bankaccount-privacy').data, '내 이체: 비공개');
     });
 
+    testWidgets('a new user has no saved choice: the settings show 공개, and saving keeps it', (tester) async {
+      final server = newServer();
+      await pumpApp(tester, server);
+      expect(server.profile.containsKey('defaultPrivacyLevel'), isFalse);
+      await tapId(tester, 'sidenav-more');
+      await tapId(tester, 'sidenav-user-settings');
+      final chip = find.descendant(of: byId('user-settings-privacy-public'), matching: find.byType(ChoiceChip));
+      expect(tester.widget<ChoiceChip>(chip).selected, isTrue);
+      await tapId(tester, 'user-settings-submit');
+
+      expect(server.profile['defaultPrivacyLevel'], 'public');
+    });
+
     testWidgets('is there without an account too', (tester) async {
       await pumpApp(tester, newServer(accounts: []));
       await tapId(tester, 'sidenav-bankaccounts');
@@ -250,6 +263,19 @@ void main() {
         '최 댓글',
         '',
       ]);
+    });
+
+    testWidgets('the name the server sends is shown, and the list of users is not asked', (tester) async {
+      final server = withComments([('s1', 'a'), ('u7', 'b'), ('u7', 'c')]);
+      final comments = server.everyone.single['comments'] as List;
+      (comments[0] as Map)['userFullName'] = '서버 이름';
+      (comments[1] as Map)['userFullName'] = '박 댓글';
+      (comments[2] as Map)['userFullName'] = '';
+      await pumpApp(tester, server);
+      await tapId(tester, 'transaction-item-t1');
+
+      expect([for (var i = 0; i < 3; i++) textOf(tester, 'comment-author-c$i').data], ['서버 이름', '박 댓글', '']);
+      expect(server.userQueries, isEmpty);
     });
 
     testWidgets('the list of users is asked only when a name is not known', (tester) async {

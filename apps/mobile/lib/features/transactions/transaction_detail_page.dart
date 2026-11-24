@@ -246,9 +246,9 @@ class _CommentList extends ConsumerWidget {
     return '${local.month}/${local.day} ${two(local.hour)}:${two(local.minute)}';
   }
 
-  /// Who wrote which comment. The server sends only the id of the author, so the
-  /// name comes from the user and the two people of the transaction, and for
-  /// anybody else from the list of users.
+  /// Who wrote which comment, for a server that sends only the id of the author: the
+  /// name comes from the user and the two people of the transaction, and for anybody
+  /// else from the list of users.
   Map<String, String> _names(WidgetRef ref) {
     final me = ref.watch(sessionProvider.select((s) => s.user));
     final names = {
@@ -257,7 +257,7 @@ class _CommentList extends ConsumerWidget {
       if (me?['id'] case final String id)
         id: koreanFullName(firstName: me?['firstName'] as String?, lastName: me?['lastName'] as String?),
     };
-    if (transaction.comments.every((c) => names.containsKey(c.userId))) return names;
+    if (transaction.comments.every((c) => c.userFullName != null || names.containsKey(c.userId))) return names;
     final users = ref.watch(usersProvider('')).value ?? const <UserSummary>[];
     return {for (final user in users) user.id: user.fullName, ...names};
   }
@@ -304,8 +304,8 @@ class _CommentList extends ConsumerWidget {
                           child: TestId(
                             'comment-author-${comment.id}',
                             child: Text(
-                              names[comment.userId] ?? '',
-                              semanticsLabel: names[comment.userId] ?? '',
+                              comment.userFullName ?? names[comment.userId] ?? '',
+                              semanticsLabel: comment.userFullName ?? names[comment.userId] ?? '',
                               style: small,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
