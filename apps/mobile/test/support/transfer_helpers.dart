@@ -9,9 +9,9 @@ Future<void> enterIn(WidgetTester tester, String id, String text) =>
 
 /// The last step of a payment: type the password and press the button.
 Future<void> confirmTransfer(WidgetTester tester, {String password = 'pw-1234'}) async {
-  await enterIn(tester, 'transfer-confirm-password-input', password);
+  await enterIn(tester, 'transaction-confirm-password', password);
   await tester.pump(); // the button turns on when something is typed
-  await tapId(tester, 'transfer-confirm-submit');
+  await tapId(tester, 'transaction-confirm-confirm');
 }
 
 /// Press 이체 on the form, then go through the password step with the right password.

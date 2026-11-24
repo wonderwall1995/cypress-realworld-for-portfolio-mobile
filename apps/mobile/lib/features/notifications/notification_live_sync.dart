@@ -4,11 +4,9 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api_client.dart';
 import '../../core/providers.dart';
-import '../../core/session.dart';
-import '../../core/test_id.dart';
-import '../bank_accounts/bank_accounts_controller.dart';
-import '../transactions/transaction_feed_controller.dart';
+import '../money/money_status.dart';
 import 'notifications_controller.dart';
 
 /// Whether the live connection is used at all. (Widget tests turn it off, so no
@@ -26,16 +24,23 @@ final livePollIntervalProvider = Provider<Duration>(
 );
 
 /// After this many failed connections in a row the app asks every
-/// [livePollIntervalProvider] instead, until it is in view again.
+/// [livePollIntervalProvider] instead.
 const liveMaxFailures = 3;
+
+/// After this many answered polls the stream is tried again (6 x 10 seconds).
+const livePollsBeforeRetry = 6;
 
 /// Keeps the notifications fresh while the app is in view, and only then.
 ///
 /// It opens the server's stream (`GET /notifications/stream`). Each time it is
 /// connected, the list is read once to catch up (nothing is replayed), and every
 /// event adds a notification at once. When the stream keeps failing it asks for
-/// the list every 10 seconds instead. When the app goes to the background, both
-/// stop; when it comes back they start again. Nothing else polls.
+/// the list every 10 seconds instead, and while that works it tries the stream again
+/// once a minute (the server may have been started again). When the app goes to the background, both
+/// stop; when it comes back they start again, and the money is read once: it can
+/// have changed without an unread notification (a deposit on another device, or a
+/// notification that was read on the web). When the sign-in is over, everything
+/// stops. Nothing else polls.
 class NotificationLiveSync extends ConsumerStatefulWidget {
   const NotificationLiveSync({required this.child, super.key});
 
@@ -53,6 +58,9 @@ class _NotificationLiveSyncState extends ConsumerState<NotificationLiveSync>
   Timer? _timer;
   int _failures = 0;
 
+  /// Really out of view, not just covered for a moment.
+  bool _wasHidden = false;
+
   @override
   void initState() {
     super.initState();
@@ -63,10 +71,16 @@ class _NotificationLiveSyncState extends ConsumerState<NotificationLiveSync>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _start();
-    } else {
-      _stop();
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _start();
+        if (_wasHidden) ref.read(moneyStatusProvider.notifier).refresh();
+        _wasHidden = false;
+      case AppLifecycleState.hidden || AppLifecycleState.paused:
+        _wasHidden = true;
+        _stop();
+      case AppLifecycleState.inactive || AppLifecycleState.detached:
+        _stop();
     }
   }
 
@@ -113,6 +127,9 @@ class _NotificationLiveSyncState extends ConsumerState<NotificationLiveSync>
         if (!_current(generation)) break;
         ref.read(notificationsProvider.notifier).receive(json);
       }
+    } on ApiException catch (e) {
+      // The sign-in is over: the session closes this screen. Do not knock again.
+      if (e.statusCode == 401) return;
     } catch (_) {
       // Closed or failed: handled the same way below.
     }
@@ -129,10 +146,16 @@ class _NotificationLiveSyncState extends ConsumerState<NotificationLiveSync>
   }
 
   void _poll(int generation) {
-    void tick() {
-      if (_current(generation)) {
-        ref.read(notificationsProvider.notifier).refresh();
-      }
+    var answered = 0;
+    Future<void> tick() async {
+      if (!_current(generation)) return;
+      final ok = await ref.read(notificationsProvider.notifier).refresh();
+      if (!ok || !_current(generation)) return;
+      if (++answered <= livePollsBeforeRetry) return;
+      // One more failure, and it polls again.
+      _timer?.cancel();
+      _failures = liveMaxFailures - 1;
+      unawaited(_connect(generation));
     }
 
     tick();
@@ -141,53 +164,4 @@ class _NotificationLiveSyncState extends ConsumerState<NotificationLiveSync>
 
   @override
   Widget build(BuildContext context) => widget.child;
-}
-
-/// Reads the account, the bank accounts and the transaction list again, and hides
-/// the notice. (The same three things the web's refresh button reads.)
-Future<void> refreshMoney(WidgetRef ref) async {
-  ref.read(moneyNoticeProvider.notifier).clear();
-  ref.invalidate(transactionFeedProvider);
-  await Future.wait([
-    ref.read(sessionProvider.notifier).refreshUser(),
-    ref.read(bankAccountsProvider.notifier).reload(),
-  ]);
-}
-
-/// "금액 변동이 생겼어요. 새로고침을 해주세요." with a 새로고침 button. It shows only
-/// when a new "received" notification came in after the app was opened.
-class MoneyChangeNotice extends ConsumerWidget {
-  const MoneyChangeNotice({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (!ref.watch(moneyNoticeProvider)) return const SizedBox.shrink();
-    final colors = Theme.of(context).colorScheme;
-    return TestId(
-      'money-change-notice',
-      child: Material(
-        color: colors.secondaryContainer,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '금액 변동이 생겼어요. 새로고침을 해주세요.',
-                  style: TextStyle(color: colors.onSecondaryContainer),
-                ),
-              ),
-              TestId(
-                'money-change-refresh',
-                child: TextButton(
-                  onPressed: () => refreshMoney(ref),
-                  child: const Text('새로고침'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }

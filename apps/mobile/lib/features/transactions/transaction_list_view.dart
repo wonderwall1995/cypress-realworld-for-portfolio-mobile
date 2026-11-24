@@ -243,7 +243,7 @@ class _TransactionTile extends ConsumerWidget {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        Icon(Icons.favorite_border, size: 16, color: muted),
+                        Icon(Icons.thumb_up_outlined, size: 16, color: muted),
                         const SizedBox(width: 4),
                         TestId('transaction-like-count', child: Text('${transaction.likeCount}')),
                         const SizedBox(width: 16),

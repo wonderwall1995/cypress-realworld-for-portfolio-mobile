@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
+import '../../core/demo_notice.dart';
+import '../../core/error_text.dart';
 import '../../core/providers.dart';
 import '../../core/session.dart';
 import '../../core/test_id.dart';
-import '../bank_accounts/bank_accounts_controller.dart';
 import 'transaction.dart';
 import 'transaction_feed_controller.dart';
 import 'transaction_widgets.dart';
@@ -27,7 +29,9 @@ class TransactionDetailPage extends ConsumerWidget {
       body: detail.when(
         skipLoadingOnReload: true,
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(
+        error: (error, _) => error is ApiException && error.statusCode == 404
+            ? const _NotFound()
+            : Center(
           child: TestId(
             'transaction-detail-error',
             child: Column(
@@ -49,13 +53,39 @@ class TransactionDetailPage extends ConsumerWidget {
   }
 }
 
-/// Loads the detail and the lists again: the status, the counts, or the
-/// balance may have changed.
-Future<void> _reloadAfterChange(WidgetRef ref, String transactionId) async {
+/// The server says 404 both for a transaction that does not exist and for one the
+/// user may not see, and the app does not guess which.
+class _NotFound extends StatelessWidget {
+  const _NotFound();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: TestId(
+        'transaction-detail-not-found',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('거래를 찾을 수 없거나 볼 수 없습니다.'),
+            const SizedBox(height: 12),
+            TestId(
+              'transaction-detail-back-to-list',
+              child: OutlinedButton(
+                onPressed: () => context.go('/'),
+                child: const Text('목록으로 돌아가기'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Loads the detail and the lists again: the counts may have changed.
+void _reload(WidgetRef ref, String transactionId) {
   ref.invalidate(transactionDetailProvider(transactionId));
   ref.invalidate(transactionFeedProvider);
-  await ref.read(bankAccountsProvider.notifier).reload();
-  await ref.read(sessionProvider.notifier).refreshUser();
 }
 
 void _showMessage(BuildContext context, String text, {required bool success}) {
@@ -78,24 +108,26 @@ class _DetailBody extends ConsumerStatefulWidget {
 class _DetailBodyState extends ConsumerState<_DetailBody> {
   bool _busy = false;
 
-  /// One like per user. (The server would accept a second one, so the button
-  /// is off after the first, like on the web.)
+  /// One like per user. The button is off after it. The server refuses a second one
+  /// (409), which can happen when the first was made on another device.
   Future<void> _like() async {
     // The button is off while busy, but a second tap in the same frame can still
-    // get here. The server would count both likes.
+    // get here.
     if (_busy) return;
     final id = widget.transaction.id;
     setState(() => _busy = true);
     try {
       await ref.read(apiClientProvider).likeTransaction(id);
-      await _reloadAfterChange(ref, id);
+      if (mounted) _reload(ref, id);
     } on ApiException catch (e) {
       if (!mounted) return;
       _showMessage(
         context,
-        e.isConnection ? '서버에 연결할 수 없습니다.' : '좋아요를 누르지 못했습니다.',
+        serverRefusalText(e, base: '좋아요를 누르지 못했습니다'),
         success: false,
       );
+      // It may have been done, or the screen is old (409): show what the server has.
+      if (e.failure != ApiFailure.notSent) _reload(ref, id);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -146,7 +178,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                           child: IconButton(
                             tooltip: '좋아요',
                             onPressed: (liked || _busy) ? null : _like,
-                            icon: Icon(liked ? Icons.favorite : Icons.favorite_border),
+                            // Like the web: the same outline before and after; after it the
+                            // button is off (grey).
+                            color: theme.colorScheme.primary,
+                            icon: const Icon(Icons.thumb_up_outlined),
                           ),
                         ),
                         TestId(
@@ -256,15 +291,17 @@ class _CommentInputState extends ConsumerState<_CommentInput> {
       await ref.read(apiClientProvider).postComment(widget.transactionId, content);
       if (!mounted) return;
       _text.clear();
-      await _reloadAfterChange(ref, widget.transactionId);
+      _reload(ref, widget.transactionId);
     } on ApiException catch (e) {
       if (!mounted) return;
       // The text stays, so the user can try again.
       _showMessage(
         context,
-        e.isConnection ? '서버에 연결할 수 없습니다.' : '댓글을 남기지 못했습니다.',
+        serverRefusalText(e, base: '댓글을 남기지 못했습니다'),
         success: false,
       );
+      // It may have been written: the list shows whether it is there.
+      if (e.resultUnknown) _reload(ref, widget.transactionId);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -289,7 +326,9 @@ class _CommentInputState extends ConsumerState<_CommentInput> {
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _send(),
                     decoration: const InputDecoration(
-                      hintText: '댓글을 입력하세요...',
+                      // No room for a notice above it when the keyboard is open.
+                      hintText: commentDemoHint,
+                      hintMaxLines: 2,
                       border: OutlineInputBorder(),
                       isDense: true,
                     ),

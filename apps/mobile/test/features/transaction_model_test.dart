@@ -6,38 +6,18 @@ import '../support/fake_server.dart';
 void main() {
   group('formatUsd', () {
     test('formats cents as dollars', () {
-      expect(formatUsd(0), '\$0.00');
+      expect(formatUsd(0), '\$0');
       expect(formatUsd(5), '\$0.05');
-      expect(formatUsd(700), '\$7.00');
+      expect(formatUsd(700), '\$7');
       expect(formatUsd(123456), '\$1,234.56');
-      expect(formatUsd(100000000), '\$1,000,000.00');
+      expect(formatUsd(100000000), '\$1,000,000');
     });
   });
 
   group('Transaction.fromJson', () {
-    test('a payment has no request status', () {
-      final t = Transaction.fromJson(testTransaction('p1'));
-      expect(t.isPayment, isTrue);
-      expect(t.isRequest, isFalse);
-      expect(t.requestStatus, isNull);
-      expect(t.actionLabel, '결제');
-      expect(t.statusLabel, '결제 완료');
-    });
-
-    test('an empty request status also means a payment', () {
-      final json = testTransaction('p1')..['requestStatus'] = '';
-      expect(Transaction.fromJson(json).isPayment, isTrue);
-    });
-
-    test('request words follow the web rule', () {
-      Transaction request(String status) =>
-          Transaction.fromJson(testTransaction('r', requestStatus: status));
-      expect(request('pending').actionLabel, '요청');
-      expect(request('rejected').actionLabel, '요청');
-      expect(request('accepted').actionLabel, '청구');
-      expect(request('pending').statusLabel, '요청 대기 중');
-      expect(request('accepted').statusLabel, '수락됨');
-      expect(request('rejected').statusLabel, '거절됨');
+    test('says where it stands', () {
+      expect(Transaction.fromJson(testTransaction('p1')).statusLabel, '이체 완료');
+      expect(Transaction.fromJson(testTransaction('p1', status: 'incomplete')).statusLabel, '처리 중');
     });
 
     test('counts likes and comments, and keeps cents', () {
@@ -58,5 +38,15 @@ void main() {
       expect(t.senderName, '');
       expect(t.amount, 0);
     });
+  });
+
+  test('money as the web shows it: no cents when there are none', () {
+    expect(formatUsd(51200), '\$512');
+    expect(formatUsd(51250), '\$512.5');
+    expect(formatUsd(123456), '\$1,234.56');
+    expect(formatUsd(5), '\$0.05');
+    expect(formatUsd(0), '\$0');
+    expect(formatUsd(-200000), '-\$2,000');
+    expect(formatUsd(2147483600), '\$21,474,836');
   });
 }

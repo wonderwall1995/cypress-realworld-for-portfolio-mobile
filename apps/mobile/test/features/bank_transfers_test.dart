@@ -28,13 +28,13 @@ void main() {
       await pumpApp(tester, newServer());
       await openMyAccount(tester);
 
-      expect(byId('my-account-deposit'), findsOneWidget);
-      expect(byId('my-account-transfer'), findsOneWidget);
+      expect(byId('sidenav-deposit'), findsOneWidget);
+      expect(byId('sidenav-transfer'), findsOneWidget);
       expect(byId('my-account-withdraw'), findsNothing);
       expect(find.text('출금'), findsNothing);
-      expect(tester.getTopLeft(byId('my-account-transfer')).dy, tester.getTopLeft(byId('my-account-deposit')).dy);
+      expect(tester.getTopLeft(byId('sidenav-transfer')).dy, tester.getTopLeft(byId('sidenav-deposit')).dy);
       final balanceBottom = tester.getBottomLeft(byId('sidenav-user-balance')).dy;
-      expect(tester.getTopLeft(byId('my-account-deposit')).dy, greaterThan(balanceBottom));
+      expect(tester.getTopLeft(byId('sidenav-deposit')).dy, greaterThan(balanceBottom));
     });
 
     testWidgets('an empty history says so', (tester) async {
@@ -52,8 +52,8 @@ void main() {
         ..transfers.addAll([
           testTransfer('old', 'deposit', 5000,
               balanceBefore: 0, balanceAfter: 5000, createdAt: '2026-11-08T10:00:00.000Z'),
-          testTransfer('auto', 'withdrawal', 48500,
-              source: '', transactionId: 'tx1', balanceBefore: 1500, balanceAfter: 0,
+          testTransfer('none', 'withdrawal', 48500,
+              source: '', balanceBefore: 1500, balanceAfter: 0,
               createdAt: '2026-11-09T18:21:22.378Z'),
           testTransfer('gone', 'withdrawal', 100,
               source: 'deleted-account', balanceBefore: 5000, balanceAfter: 4900,
@@ -62,19 +62,19 @@ void main() {
       await pumpApp(tester, server);
       await openMyAccount(tester);
 
-      // Newest first: auto (11/9), then gone (11/8 12:00), then old (11/8 10:00).
-      final autoY = tester.getTopLeft(byId('bank-transfer-list-item-auto')).dy;
+      // Newest first: none (11/9), then gone (11/8 12:00), then old (11/8 10:00).
+      final noneY = tester.getTopLeft(byId('bank-transfer-list-item-none')).dy;
       final goneY = tester.getTopLeft(byId('bank-transfer-list-item-gone')).dy;
       final oldY = tester.getTopLeft(byId('bank-transfer-list-item-old')).dy;
-      expect(autoY, lessThan(goneY));
+      expect(noneY, lessThan(goneY));
       expect(goneY, lessThan(oldY));
 
       expect(find.text('입금 · First Test Bank'), findsOneWidget);
-      expect(find.text('출금 (결제 부족분) · 은행 계좌 없음'), findsOneWidget);
+      expect(find.text('출금 · 은행 계좌 없음'), findsOneWidget);
       expect(find.text('출금 · 삭제된 은행 계좌'), findsOneWidget);
-      expect(find.descendant(of: byId('bank-transfer-amount-old'), matching: find.text('+\$50.00')), findsOneWidget);
-      expect(find.descendant(of: byId('bank-transfer-amount-auto'), matching: find.text('-\$485.00')), findsOneWidget);
-      expect(find.textContaining('잔액 \$15.00 → \$0.00'), findsOneWidget);
+      expect(find.descendant(of: byId('bank-transfer-amount-old'), matching: find.text('+\$50')), findsOneWidget);
+      expect(find.descendant(of: byId('bank-transfer-amount-none'), matching: find.text('-\$485')), findsOneWidget);
+      expect(find.textContaining('잔액 \$15 → \$0'), findsOneWidget);
     });
 
     testWidgets('a failed load shows an error with retry', (tester) async {
@@ -130,14 +130,14 @@ void main() {
   group('the 입금 dialog', () {
     testWidgets('입금 opens a dialog over the tab with the account and the amount', (tester) async {
       await pumpApp(tester, newServer());
-      await openForm(tester, 'my-account-deposit');
+      await openForm(tester, 'sidenav-deposit');
 
-      expect(byId('bank-transfer-dialog'), findsOneWidget);
+      expect(byId('deposit-dialog'), findsOneWidget);
       expect(find.byType(AlertDialog), findsOneWidget);
       expect(find.text('선택한 내 은행 계좌에 입금합니다.'), findsOneWidget);
-      expect(byId('bank-transfer-account-b1'), findsOneWidget);
-      expect(byId('bank-transfer-amount-input'), findsOneWidget);
-      expect(find.descendant(of: byId('bank-transfer-submit'), matching: find.text('입금하기')), findsOneWidget);
+      expect(byId('deposit-account-b1'), findsOneWidget);
+      expect(byId('deposit-amount-input'), findsOneWidget);
+      expect(find.descendant(of: byId('deposit-submit-button'), matching: find.text('입금하기')), findsOneWidget);
       // A dialog, not a screen: the tab bar is still there behind it.
       expect(byId('sidenav-home'), findsOneWidget);
     });
@@ -145,19 +145,19 @@ void main() {
     testWidgets('취소 closes the dialog and sends nothing', (tester) async {
       final server = newServer();
       await pumpApp(tester, server);
-      await openForm(tester, 'my-account-deposit');
-      await enter(tester, 'bank-transfer-amount-input', '5');
+      await openForm(tester, 'sidenav-deposit');
+      await enter(tester, 'deposit-amount-input', '5');
 
-      await tapId(tester, 'bank-transfer-cancel');
+      await tapId(tester, 'deposit-cancel-button');
 
-      expect(byId('bank-transfer-dialog'), findsNothing);
+      expect(byId('deposit-dialog'), findsNothing);
       expect(server.calls, isNot(contains('POST /bankTransfers')));
-      expect(balance('\$100.00'), findsOneWidget);
+      expect(balance('\$100'), findsOneWidget);
     });
 
     testWidgets('it has no 출금 wording', (tester) async {
       await pumpApp(tester, newServer());
-      await openForm(tester, 'my-account-deposit');
+      await openForm(tester, 'sidenav-deposit');
 
       expect(find.text('출금하기'), findsNothing);
       expect(find.text('내 계좌에서 은행 계좌로 옮깁니다.'), findsNothing);
@@ -167,10 +167,10 @@ void main() {
     testWidgets('with one account, it is chosen already', (tester) async {
       final server = newServer();
       await pumpApp(tester, server);
-      await openForm(tester, 'my-account-deposit');
+      await openForm(tester, 'sidenav-deposit');
 
-      await enter(tester, 'bank-transfer-amount-input', '5');
-      await tapId(tester, 'bank-transfer-submit');
+      await enter(tester, 'deposit-amount-input', '5');
+      await tapId(tester, 'deposit-submit-button');
 
       expect(server.bodies['POST /bankTransfers'], {'bankAccountId': 'b1', 'amount': 5, 'type': 'deposit'});
     });
@@ -181,15 +181,15 @@ void main() {
         testAccount('b2', bank: 'Second Test Bank'),
       ]);
       await pumpApp(tester, server);
-      await openForm(tester, 'my-account-deposit');
+      await openForm(tester, 'sidenav-deposit');
 
-      await enter(tester, 'bank-transfer-amount-input', '5');
-      await tapId(tester, 'bank-transfer-submit');
+      await enter(tester, 'deposit-amount-input', '5');
+      await tapId(tester, 'deposit-submit-button');
       expect(find.text('은행 계좌를 선택하세요.'), findsOneWidget);
       expect(server.calls, isNot(contains('POST /bankTransfers')));
 
-      await tapId(tester, 'bank-transfer-account-b2');
-      await tapId(tester, 'bank-transfer-submit');
+      await tapId(tester, 'deposit-account-b2');
+      await tapId(tester, 'deposit-submit-button');
 
       expect((server.bodies['POST /bankTransfers'] as Map)['bankAccountId'], 'b2');
     });
@@ -197,9 +197,9 @@ void main() {
     testWidgets('checks the amount before sending', (tester) async {
       final server = newServer();
       await pumpApp(tester, server);
-      await openForm(tester, 'my-account-deposit');
+      await openForm(tester, 'sidenav-deposit');
 
-      await tapId(tester, 'bank-transfer-submit');
+      await tapId(tester, 'deposit-submit-button');
       expect(find.text('금액을 입력하세요.'), findsOneWidget);
 
       for (final (text, message) in [
@@ -210,8 +210,8 @@ void main() {
         ('+5', '금액은 숫자로 입력하세요. (달러 단위, 소수점 없음)'),
         ('21474837', '금액은 21,474,836달러 이하여야 합니다.'),
       ]) {
-        await enter(tester, 'bank-transfer-amount-input', text);
-        await tapId(tester, 'bank-transfer-submit');
+        await enter(tester, 'deposit-amount-input', text);
+        await tapId(tester, 'deposit-submit-button');
         expect(find.text(message), findsOneWidget, reason: text);
       }
       expect(server.calls, isNot(contains('POST /bankTransfers')));
@@ -222,40 +222,40 @@ void main() {
     testWidgets('a deposit goes into the bank account, closes the dialog, and shows in the history', (tester) async {
       final server = newServer();
       await pumpApp(tester, server);
-      await openForm(tester, 'my-account-deposit');
+      await openForm(tester, 'sidenav-deposit');
 
-      await enter(tester, 'bank-transfer-amount-input', '50');
-      await tapId(tester, 'bank-transfer-submit');
+      await enter(tester, 'deposit-amount-input', '50');
+      await tapId(tester, 'deposit-submit-button');
 
       expect(server.bodies['POST /bankTransfers'], {'bankAccountId': 'b1', 'amount': 50, 'type': 'deposit'});
-      expect(byId('bank-transfer-dialog'), findsNothing); // back on the tab
-      expect(find.text('First Test Bank 계좌에 \$50.00를 입금했습니다.'), findsOneWidget);
+      expect(byId('deposit-dialog'), findsNothing); // back on the tab
+      expect(find.text('First Test Bank 계좌에 \$50를 입금했습니다.'), findsOneWidget);
       expect(find.text('입금 · First Test Bank'), findsOneWidget);
-      expect(find.textContaining('계좌 잔액 \$0.00 → \$50.00'), findsOneWidget);
+      expect(find.textContaining('계좌 잔액 \$0 → \$50'), findsOneWidget);
       expect(server.accounts.first['balance'], 5000);
     });
 
     testWidgets('a deposit does not change the balance of 내 계좌', (tester) async {
       final server = newServer();
       await pumpApp(tester, server);
-      await openForm(tester, 'my-account-deposit');
+      await openForm(tester, 'sidenav-deposit');
 
-      await enter(tester, 'bank-transfer-amount-input', '50');
-      await tapId(tester, 'bank-transfer-submit');
+      await enter(tester, 'deposit-amount-input', '50');
+      await tapId(tester, 'deposit-submit-button');
 
-      expect(balance('\$100.00'), findsOneWidget);
+      expect(balance('\$100'), findsOneWidget);
       expect(server.balance, 10000);
     });
 
     testWidgets('the bank account list shows the new money of the account after a deposit', (tester) async {
       await pumpApp(tester, newServer());
-      await openForm(tester, 'my-account-deposit');
-      await enter(tester, 'bank-transfer-amount-input', '50');
-      await tapId(tester, 'bank-transfer-submit');
+      await openForm(tester, 'sidenav-deposit');
+      await enter(tester, 'deposit-amount-input', '50');
+      await tapId(tester, 'deposit-submit-button');
 
       await tapId(tester, 'sidenav-bankaccounts');
 
-      expect(find.text('계좌 번호 ****6789 · 잔액 \$50.00'), findsOneWidget);
+      expect(find.text('잔액 \$50'), findsOneWidget);
     });
 
     testWidgets('the dialog shows how much each account holds', (tester) async {
@@ -264,40 +264,40 @@ void main() {
         testAccount('b2', bank: 'Second Test Bank'),
       ]);
       await pumpApp(tester, server);
-      await openForm(tester, 'my-account-deposit');
+      await openForm(tester, 'sidenav-deposit');
 
-      expect(find.text('계좌 번호 ****6789 · 잔액 \$123.45'), findsOneWidget);
+      expect(find.text('계좌 번호 ····6789 · 잔액 \$123.45'), findsOneWidget);
       // An account without a balance from the server shows only its number.
-      expect(find.text('계좌 번호 ****6789'), findsOneWidget);
+      expect(find.text('계좌 번호 ····6789'), findsOneWidget);
     });
 
     testWidgets('a second deposit adds to the account balance', (tester) async {
       final server = newServer();
       await pumpApp(tester, server);
       for (final dollars in ['10', '25']) {
-        await openForm(tester, 'my-account-deposit');
-        await enter(tester, 'bank-transfer-amount-input', dollars);
-        await tapId(tester, 'bank-transfer-submit');
+        await openForm(tester, 'sidenav-deposit');
+        await enter(tester, 'deposit-amount-input', dollars);
+        await tapId(tester, 'deposit-submit-button');
       }
 
       expect(server.accounts.first['balance'], 3500);
-      expect(find.textContaining('계좌 잔액 \$10.00 → \$35.00'), findsOneWidget);
+      expect(find.textContaining('계좌 잔액 \$10 → \$35'), findsOneWidget);
     });
 
     testWidgets('a deposit that would make the account balance too large is refused by the server; the dialog stays',
         (tester) async {
       final server = newServer(accounts: [testAccount('b1', bank: 'First Test Bank', balance: 2147483000)]);
       await pumpApp(tester, server);
-      await openForm(tester, 'my-account-deposit');
+      await openForm(tester, 'sidenav-deposit');
 
-      await enter(tester, 'bank-transfer-amount-input', '500');
-      await tapId(tester, 'bank-transfer-submit');
+      await enter(tester, 'deposit-amount-input', '500');
+      await tapId(tester, 'deposit-submit-button');
 
       // The app does not stop the request. The server answered 400.
       expect(server.calls, contains('POST /bankTransfers'));
       expect(find.text('계좌 잔액 한도를 넘어서 입금할 수 없습니다'), findsOneWidget);
-      expect(byId('bank-transfer-error'), findsOneWidget);
-      expect(byId('bank-transfer-dialog'), findsOneWidget); // still open
+      expect(byId('deposit-error'), findsOneWidget);
+      expect(byId('deposit-dialog'), findsOneWidget); // still open
       expect(server.accounts.first['balance'], 2147483000);
       expect(server.transfers, isEmpty);
     });
@@ -305,27 +305,27 @@ void main() {
     testWidgets('after a refusal the user can fix the amount and try again', (tester) async {
       final server = newServer(accounts: [testAccount('b1', bank: 'First Test Bank', balance: 2147483000)]);
       await pumpApp(tester, server);
-      await openForm(tester, 'my-account-deposit');
+      await openForm(tester, 'sidenav-deposit');
 
-      await enter(tester, 'bank-transfer-amount-input', '500');
-      await tapId(tester, 'bank-transfer-submit');
-      expect(byId('bank-transfer-error'), findsOneWidget);
+      await enter(tester, 'deposit-amount-input', '500');
+      await tapId(tester, 'deposit-submit-button');
+      expect(byId('deposit-error'), findsOneWidget);
 
-      await enter(tester, 'bank-transfer-amount-input', '5');
-      await tapId(tester, 'bank-transfer-submit');
+      await enter(tester, 'deposit-amount-input', '5');
+      await tapId(tester, 'deposit-submit-button');
 
-      expect(byId('bank-transfer-dialog'), findsNothing);
+      expect(byId('deposit-dialog'), findsNothing);
       expect(server.accounts.first['balance'], 2147483500);
     });
 
     testWidgets('two taps in one frame send one request', (tester) async {
       final server = newServer();
       await pumpApp(tester, server);
-      await openForm(tester, 'my-account-deposit');
-      await enter(tester, 'bank-transfer-amount-input', '5');
+      await openForm(tester, 'sidenav-deposit');
+      await enter(tester, 'deposit-amount-input', '5');
 
-      await tester.tap(byId('bank-transfer-submit'));
-      await tester.tap(byId('bank-transfer-submit'), warnIfMissed: false);
+      await tester.tap(byId('deposit-submit-button'));
+      await tester.tap(byId('deposit-submit-button'), warnIfMissed: false);
       await tester.pumpAndSettle();
 
       expect(server.calls.where((c) => c == 'POST /bankTransfers'), hasLength(1));
@@ -336,64 +336,45 @@ void main() {
     testWidgets('other server answers get a Korean message', (tester) async {
       final server = newServer();
       await pumpApp(tester, server);
-      await openForm(tester, 'my-account-deposit');
-      await enter(tester, 'bank-transfer-amount-input', '5');
+      await openForm(tester, 'sidenav-deposit');
+      await enter(tester, 'deposit-amount-input', '5');
 
       server.moveMoneyStatus = 422;
-      await tapId(tester, 'bank-transfer-submit');
-      expect(find.text('입금하지 못했습니다 (refused)'), findsOneWidget);
-
-      server.moveMoneyStatus = 500;
-      await tapId(tester, 'bank-transfer-submit');
+      await tapId(tester, 'deposit-submit-button');
       expect(find.text('입금하지 못했습니다 (refused)'), findsOneWidget);
 
       server.moveMoneyStatus = null;
       server.down = true;
-      await tapId(tester, 'bank-transfer-submit');
-      expect(find.text('서버에서 처리하지 못했습니다. 잠시 뒤 다시 시도하세요'), findsOneWidget);
+      await tapId(tester, 'deposit-submit-button');
+      expect(find.text('서버에 연결할 수 없어 처리하지 못했습니다. 잠시 뒤 다시 시도하세요'), findsOneWidget);
     });
   });
 
   group('without a bank account', () {
     testWidgets('says an account is needed and offers to create one', (tester) async {
-      // The only account was deleted. The app treats it as no account.
-      final server = FakeServer(signedIn: true, accounts: [testAccount('b1', isDeleted: true)]);
-      await pumpApp(tester, server);
-      // (The first-time setup would open here, so finish it with a new account.)
-      await tapId(tester, 'user-onboarding-next');
-      await enter(tester, 'bankaccount-bankName-input', 'New Test Bank');
-      await enter(tester, 'bankaccount-accountNumber-input', '555666777');
-      await tapId(tester, 'bankaccount-submit');
-      await tapId(tester, 'user-onboarding-next');
-
-      // Now delete it from the 은행 계좌 tab. The setup does not open again.
-      await tapId(tester, 'sidenav-bankaccounts');
-      await tester.tap(byId('bankaccount-delete'));
-      await tester.pumpAndSettle();
-      await tapId(tester, 'bankaccount-delete-confirm');
+      await pumpApp(tester, FakeServer(signedIn: true));
 
       await openMyAccount(tester);
-      await tapId(tester, 'my-account-deposit');
+      await tapId(tester, 'sidenav-deposit');
 
-      expect(byId('bank-transfer-no-account'), findsOneWidget);
+      expect(byId('deposit-no-account'), findsOneWidget);
       expect(find.text('입금하려면 은행 계좌가 필요합니다.'), findsOneWidget);
-      expect(byId('bank-transfer-amount-input'), findsNothing);
-      expect(byId('bank-transfer-submit'), findsNothing); // nothing to submit
+      expect(byId('deposit-amount-input'), findsNothing);
+      expect(byId('deposit-submit-button'), findsNothing); // nothing to submit
 
-      await tapId(tester, 'bank-transfer-create-account');
-      expect(byId('bank-transfer-dialog'), findsNothing); // the dialog closed
+      await tapId(tester, 'deposit-go-bankaccounts-button');
+      expect(byId('deposit-dialog'), findsNothing); // the dialog closed
       expect(byId('bankaccount-form'), findsOneWidget);
     });
   });
 
   group('BankTransfer', () {
-    test('an empty account and transaction mean a withdrawal the server made', () {
-      final t = BankTransfer.fromJson(
-        testTransfer('a', 'withdrawal', 100, source: '', transactionId: 'tx'),
-      );
-      expect(t.bankAccountId, isNull);
-      expect(t.isAutomatic, isTrue);
-      expect(t.label, '출금 (결제 부족분)');
+    test('an empty account is no account', () {
+      expect(BankTransfer.fromJson(testTransfer('a', 'withdrawal', 100, source: '')).bankAccountId, isNull);
+    });
+
+    test('a deposit that has a transaction is still only a deposit', () {
+      expect(BankTransfer.fromJson(testTransfer('a', 'deposit', 100, transactionId: 'tx')).label, '입금');
     });
 
     test('labels', () {
@@ -408,7 +389,7 @@ void main() {
 
     test('error messages follow what the server says', () {
       String msg(String text, {int? status, bool deposit = false}) => bankTransferErrorMessage(
-            ApiException(text, statusCode: status),
+            ApiException(text, statusCode: status, serverMessage: text),
             isDeposit: deposit,
           );
       expect(msg('not enough balance', status: 400), '선택한 계좌의 잔액이 부족합니다');
@@ -417,11 +398,13 @@ void main() {
       expect(msg('bank account not found', status: 404), '은행 계좌를 찾을 수 없습니다');
       expect(msg('this is not your bank account', status: 403), '선택한 계좌를 사용할 수 없습니다');
       // A reason that is not in the table: the sentence and the server's reason in brackets.
-      expect(msg('boom', status: 500), '출금하지 못했습니다 (boom)');
-      expect(msg('boom', status: 500, deposit: true), '입금하지 못했습니다 (boom)');
+      expect(msg('boom', status: 400), '출금하지 못했습니다 (boom)');
+      expect(msg('boom', status: 400, deposit: true), '입금하지 못했습니다 (boom)');
+      // A server failure is not shown, and nobody knows whether it was done.
+      expect(msg('boom', status: 500, deposit: true), '응답을 받지 못해 처리 결과를 확인할 수 없습니다.');
       expect(
         bankTransferErrorMessage(const ApiException('x', isConnection: true), isDeposit: true),
-        '서버에서 처리하지 못했습니다. 잠시 뒤 다시 시도하세요',
+        '서버에 연결할 수 없어 처리하지 못했습니다. 잠시 뒤 다시 시도하세요',
       );
     });
   });

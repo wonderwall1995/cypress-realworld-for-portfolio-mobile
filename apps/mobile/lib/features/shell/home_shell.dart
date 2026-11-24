@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/session.dart';
 import '../../core/test_id.dart';
 import '../bank_accounts/bank_accounts_controller.dart';
+import '../money/money_status.dart';
 import '../notifications/notification_live_sync.dart';
 import '../notifications/notifications_controller.dart';
 
@@ -59,6 +60,32 @@ class _UnreadBadgeOverlay extends ConsumerWidget {
   }
 }
 
+/// The yellow background of the 은행 계좌 menu while the user has no bank account
+/// (the same yellow as the web). There is no text; a screen reader gets a hint.
+class _MenuColor extends StatelessWidget {
+  const _MenuColor({required this.warning, required this.child});
+
+  final bool warning;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!warning) return child;
+    return Semantics(
+      hint: '등록된 은행 계좌가 없습니다',
+      child: Container(
+        key: const ValueKey('sidenav-bankaccounts-warning'),
+        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFD54F),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: child,
+      ),
+    );
+  }
+}
+
 /// Bottom tab bar. Test ids follow the web side menu names.
 ///
 /// The last button, "더보기" (...), opens a menu instead of a screen.
@@ -88,13 +115,17 @@ class HomeShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Only when the server said so: a list that could not be read is not "none".
+    final noAccounts = ref.watch(
+      bankAccountsProvider.select((a) => !a.isLoading && !a.hasError && (a.value?.isEmpty ?? false)),
+    );
     return NotificationLiveSync(
       child: Scaffold(
         body: navigationShell,
         bottomNavigationBar: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const MoneyChangeNotice(),
+            const MoneyNotice(),
             Stack(
               children: [
                 NavigationBar(
@@ -104,12 +135,13 @@ class HomeShell extends ConsumerWidget {
                       _openMoreMenu(context, ref);
                       return;
                     }
-                    // The balance may have changed (a request was accepted, for example).
+                    // The balance may have changed (on another device, for example).
                     if (_tabs[index].id == 'sidenav-my-account') {
                       ref.read(sessionProvider.notifier).refreshUser();
                     }
-                    // The money in the accounts may have changed (a transfer, a deposit, an accepted request).
+                    // The money in the accounts may have changed (a transfer, a deposit).
                     if (_tabs[index].id == 'sidenav-bankaccounts') {
+                      ref.read(bankAccountDeleteErrorProvider.notifier).set(null);
                       ref.read(bankAccountsProvider.notifier).reload();
                     }
                     // New notifications may have come in. (There is no automatic refresh.)
@@ -125,9 +157,12 @@ class HomeShell extends ConsumerWidget {
                     for (final tab in _tabs)
                       TestId(
                         tab.id,
-                        child: NavigationDestination(
-                          icon: Icon(tab.icon),
-                          label: tab.label,
+                        child: _MenuColor(
+                          warning: noAccounts && tab.id == 'sidenav-bankaccounts',
+                          child: NavigationDestination(
+                            icon: Icon(tab.icon),
+                            label: tab.label,
+                          ),
                         ),
                       ),
                     const TestId(

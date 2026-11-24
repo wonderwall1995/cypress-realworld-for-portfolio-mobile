@@ -6,9 +6,8 @@ import '../support/fake_server.dart';
 
 void main() {
   group('AppNotification.fromJson', () {
-    test('knows the four kinds', () {
+    test('knows the three kinds', () {
       for (final (kind, expected) in [
-        ('requested', NotificationKind.requested),
         ('received', NotificationKind.received),
         ('like', NotificationKind.like),
         ('comment', NotificationKind.comment),
@@ -24,11 +23,11 @@ void main() {
 
     test('an unknown kind gives null', () {
       expect(AppNotification.fromJson({...testNotification('n', 'like'), 'likeId': null, 'status': 'x'}), isNull);
+      // A kind that no longer exists.
+      expect(AppNotification.fromJson({...testNotification('n', 'like'), 'likeId': null, 'status': 'requested'}), isNull);
     });
 
     test('the Korean message uses the name from the server', () {
-      expect(AppNotification.fromJson(testNotification('n', 'requested', name: 'Bob Test'))!.message,
-          'Bob Test님이 결제를 요청했습니다.');
       expect(AppNotification.fromJson(testNotification('n', 'received', name: 'Ada Kim'))!.message,
           'Ada Kim님이 이체했습니다.');
     });

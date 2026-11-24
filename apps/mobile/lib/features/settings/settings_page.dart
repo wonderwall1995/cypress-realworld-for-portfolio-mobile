@@ -3,12 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_client.dart';
+import '../../core/demo_notice.dart';
+import '../../core/form_check.dart';
+import '../../core/error_text.dart';
 import '../../core/providers.dart';
 import '../../core/session.dart';
 import '../../core/test_id.dart';
 import '../auth/auth_widgets.dart';
 import '../transactions/transaction_widgets.dart';
 import 'phone_rule.dart';
+import 'privacy.dart';
 
 /// The email check. (The web uses Yup's `email()`; this is the usual simple rule.)
 final _emailPattern = RegExp(
@@ -24,17 +28,10 @@ String? validateEmail(String? value) {
   return null;
 }
 
-/// The values the server knows, with the words the user sees.
-const privacyChoices = [
-  (value: 'public', label: '공개'),
-  (value: 'private', label: '비공개'),
-];
-
 /// The reason shown after "설정 저장 실패: ".
-String saveErrorReason(ApiException e) {
-  if (e.isConnection) return '서버에 연결할 수 없습니다.';
-  return '입력한 내용을 확인해 주세요.';
-}
+String saveErrorReason(ApiException e) => e.failure == ApiFailure.notSent
+    ? '서버에 연결할 수 없습니다.'
+    : serverRefusalText(e, base: '저장하지 못했습니다');
 
 /// "설정": the user's own profile (same fields as the web) and the default
 /// privacy of new transactions (not on the web screen).
@@ -64,9 +61,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _lastName = TextEditingController(text: user?['lastName'] as String? ?? '');
     _email = TextEditingController(text: user?['email'] as String? ?? '');
     _phone = TextEditingController(text: user?['phoneNumber'] as String? ?? '');
-    // A user with no saved choice is "public" (the server does the same).
-    final saved = user?['defaultPrivacyLevel'] as String?;
-    _privacy = privacyChoices.any((c) => c.value == saved) ? saved! : 'public';
+    _privacy = privacyOf(user?['defaultPrivacyLevel']);
   }
 
   @override
@@ -81,7 +76,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Future<void> _save() async {
     // A second tap in the same frame must not send a second request.
     if (_busy) return;
-    if (!_formKey.currentState!.validate()) return;
+    if (!checkForm(_formKey)) return;
     final userId = ref.read(sessionProvider).user?['id'] as String?;
     if (userId == null) return;
     setState(() {
@@ -98,9 +93,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             defaultPrivacyLevel: _privacy,
           );
       // Load the user again: the name on the 내 계좌 tab and in the menu changes.
-      await ref.read(sessionProvider.notifier).refreshUser();
+      final shown = await ref.read(sessionProvider.notifier).refreshUser();
       if (!mounted) return;
-      setState(() => _result = (success: true, text: '설정 저장 성공'));
+      setState(
+        () => _result = (
+          success: true,
+          // Saved, but the name on the other screens may be the old one.
+          text: shown ? '설정 저장 성공' : '설정 저장 성공. 표시 정보는 새로 불러오지 못했습니다.',
+        ),
+      );
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _result = (success: false, text: '설정 저장 실패: ${saveErrorReason(e)}'));
@@ -142,22 +143,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         children: [
                           InitialAvatar(fullName, radius: 24),
                           const SizedBox(width: 12),
-                          TestId(
-                            'user-settings-username',
-                            child: Text(username == null ? '' : '@$username', style: theme.textTheme.titleMedium),
+                          Expanded(
+                            child: TestId(
+                              'user-settings-username',
+                              child: Text(username == null ? '' : '@$username', style: theme.textTheme.titleMedium),
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 24),
-                      TestId(
-                        'user-settings-firstName-input',
-                        child: TextFormField(
-                          controller: _firstName,
-                          decoration: const InputDecoration(labelText: '이름', border: OutlineInputBorder()),
-                          textInputAction: TextInputAction.next,
-                          validator: (v) => (v == null || v.trim().isEmpty) ? '이름을 입력하세요.' : null,
-                        ),
-                      ),
+                      const SizedBox(height: 16),
+                      const DemoNotice(id: 'user-settings-demo-notice', text: settingsDemoNotice),
                       const SizedBox(height: 16),
                       TestId(
                         'user-settings-lastName-input',
@@ -166,6 +161,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           decoration: const InputDecoration(labelText: '성', border: OutlineInputBorder()),
                           textInputAction: TextInputAction.next,
                           validator: (v) => (v == null || v.trim().isEmpty) ? '성을 입력하세요.' : null,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TestId(
+                        'user-settings-firstName-input',
+                        child: TextFormField(
+                          controller: _firstName,
+                          decoration: const InputDecoration(labelText: '이름', border: OutlineInputBorder()),
+                          textInputAction: TextInputAction.next,
+                          validator: (v) => (v == null || v.trim().isEmpty) ? '이름을 입력하세요.' : null,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -194,7 +199,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      Text('새 거래의 기본 공개 범위', style: theme.textTheme.titleSmall),
+                      Text('새 이체의 기본 공개 범위', style: theme.textTheme.titleSmall),
                       const SizedBox(height: 8),
                       TestId(
                         'user-settings-privacy',
@@ -207,24 +212,31 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                 child: ChoiceChip(
                                   label: Text(choice.label),
                                   selected: _privacy == choice.value,
-                                  onSelected: (_) => setState(() => _privacy = choice.value),
+                                  onSelected: (_) => setState(() {
+                                    _privacy = choice.value;
+                                    _result = null;
+                                  }),
                                 ),
                               ),
                           ],
                         ),
                       ),
                       const SizedBox(height: 12),
-                      // The place of the result stays, so the form does not jump.
-                      SizedBox(
-                        height: 20,
+                      // The place of the result stays, so the form does not jump. A long reason
+                      // takes more lines.
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 20),
                         child: _result == null
                             ? null
                             : TestId(
-                                'user-settings-result',
-                                child: Text(
-                                  _result!.text,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: _result!.success ? Colors.green.shade700 : theme.colorScheme.error,
+                                'user-settings-message',
+                                child: Semantics(
+                                  liveRegion: true,
+                                  child: Text(
+                                    _result!.text,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: _result!.success ? Colors.green.shade800 : theme.colorScheme.error,
+                                    ),
                                   ),
                                 ),
                               ),

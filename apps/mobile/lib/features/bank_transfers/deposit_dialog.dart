@@ -1,19 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
+import '../../core/form_check.dart';
 import '../../core/providers.dart';
-import '../../core/session.dart';
 import '../../core/test_id.dart';
 import '../auth/auth_widgets.dart';
 import '../bank_accounts/bank_account.dart';
 import '../bank_accounts/bank_accounts_controller.dart';
+import '../money/money_status.dart';
+import '../money/unconfirmed.dart';
 import '../transactions/amount_input.dart';
 import '../transactions/transaction.dart';
-import '../transactions/transaction_feed_controller.dart';
 import 'bank_transfer.dart';
-import 'bank_transfers_controller.dart';
 
 /// Opens the deposit dialog over the current screen.
 Future<void> showDepositDialog(BuildContext context) {
@@ -24,8 +26,11 @@ Future<void> showDepositDialog(BuildContext context) {
 }
 
 /// 입금: the user chooses one of their own bank accounts and enters whole
-/// dollars. The amount goes into that bank account (its balance goes up). The
-/// balance on the 내 계좌 tab does not change.
+/// dollars. The amount goes into that bank account (its balance goes up).
+///
+/// While the request is on its way the dialog cannot be closed: closing it would
+/// not stop the deposit. When no answer comes, nobody knows whether it was done, so
+/// the dialog does not offer to send it again; it offers the history.
 ///
 /// With only one bank account there is nothing to choose, so it counts as chosen.
 /// With no bank account, the dialog says so and offers to create one.
@@ -41,10 +46,14 @@ class _DepositDialogState extends ConsumerState<DepositDialog> {
   final _amount = TextEditingController();
   String? _accountId;
   bool _busy = false;
+  bool _unknown = false;
   String? _error;
 
-  String? _selectedId(List<BankAccount> accounts) =>
-      _accountId ?? (accounts.length == 1 ? accounts.single.id : null);
+  /// An account that is gone (deleted somewhere else) is not chosen any more.
+  String? _selectedId(List<BankAccount> accounts) {
+    if (accounts.any((a) => a.id == _accountId)) return _accountId;
+    return accounts.length == 1 ? accounts.single.id : null;
+  }
 
   @override
   void dispose() {
@@ -54,16 +63,27 @@ class _DepositDialogState extends ConsumerState<DepositDialog> {
 
   Future<void> _submit() async {
     // A second tap in the same frame must not send a second request.
-    if (_busy) return;
-    if (!_formKey.currentState!.validate()) return;
+    if (_busy || _unknown) return;
+    if (!checkForm(_formKey)) return;
     final dollars = int.parse(_amount.text.trim());
     final bankAccounts = ref.read(bankAccountsProvider).value ?? const <BankAccount>[];
     final accountId = _selectedId(bankAccounts);
     if (accountId == null) return;
     final bankName = bankAccounts.where((a) => a.id == accountId).firstOrNull?.bankName;
+    switch (await askBeforeSending(context, ref, MoneyKind.deposit)) {
+      case BeforeSending.send:
+        break;
+      case BeforeSending.history:
+        if (mounted) _checkHistory();
+        return;
+      case BeforeSending.cancel:
+        return;
+    }
+    if (!mounted || _busy) return;
     // Keep these before the await: the dialog may be gone after it.
     final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
+    final money = ref.read(moneyStatusProvider.notifier);
+    final unconfirmed = ref.read(unconfirmedMoneyProvider.notifier);
 
     setState(() {
       _busy = true;
@@ -75,12 +95,9 @@ class _DepositDialogState extends ConsumerState<DepositDialog> {
             amount: dollars,
             type: 'deposit',
           );
-      // The money of that bank account and the history have changed.
-      ref.invalidate(bankTransfersProvider);
-      await ref.read(bankAccountsProvider.notifier).reload();
-      // The server made an "외부 입금" transaction: the home lists load again.
-      ref.invalidate(transactionFeedProvider);
-      await ref.read(sessionProvider.notifier).refreshUser();
+      // Approved. Reading the money again is a separate thing: when it fails the
+      // deposit is still done, and only the reading is offered again.
+      unawaited(money.refresh(afterWrite: true));
       messenger.showSnackBar(
         SnackBar(
           content: TestId(
@@ -93,13 +110,36 @@ class _DepositDialogState extends ConsumerState<DepositDialog> {
           ),
         ),
       );
-      navigator.pop();
+      if (mounted) _close();
     } on ApiException catch (e) {
+      if (e.resultUnknown) {
+        unconfirmed.add(
+          MoneyKind.deposit,
+          '${bankName ?? '은행 계좌'}에 입금 ${formatUsd(dollars * 100)}',
+        );
+      }
       if (!mounted) return;
-      setState(() => _error = bankTransferErrorMessage(e, isDeposit: true));
+      setState(() {
+        _error = bankTransferErrorMessage(e, isDeposit: true);
+        _unknown = e.resultUnknown;
+      });
+      // The refusal may mean that the list on the screen is old.
+      if (!e.isConnection) unawaited(ref.read(bankAccountsProvider.notifier).reload());
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  void _close() {
+    setState(() => _busy = false);
+    Navigator.of(context).pop();
+  }
+
+  void _checkHistory() {
+    final router = GoRouter.of(context);
+    unawaited(ref.read(moneyStatusProvider.notifier).refresh());
+    _close();
+    router.go('/my-account');
   }
 
   @override
@@ -107,8 +147,11 @@ class _DepositDialogState extends ConsumerState<DepositDialog> {
     final accounts = ref.watch(bankAccountsProvider);
 
     return TestId(
-      'bank-transfer-dialog',
-      child: AlertDialog(
+      'deposit-dialog',
+      // Cancel, a tap outside and the Back button all follow this.
+      child: PopScope(
+        canPop: !_busy,
+        child: AlertDialog(
         title: const Text('입금'),
         scrollable: true,
         content: SizedBox(
@@ -120,7 +163,7 @@ class _DepositDialogState extends ConsumerState<DepositDialog> {
               child: Center(child: CircularProgressIndicator()),
             ),
             error: (error, _) => TestId(
-              'bank-transfer-accounts-error',
+              'deposit-accounts-error',
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -138,18 +181,24 @@ class _DepositDialogState extends ConsumerState<DepositDialog> {
         ),
         actions: [
           TestId(
-            'bank-transfer-cancel',
+            'deposit-cancel-button',
             child: TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('취소'),
+              onPressed: _busy ? null : () => Navigator.of(context).pop(),
+              child: Text(_unknown ? '닫기' : '취소'),
             ),
           ),
-          if (accounts.value?.isNotEmpty ?? false)
+          if (_unknown)
             TestId(
-              'bank-transfer-submit',
+              'deposit-check-history',
+              child: FilledButton(onPressed: _checkHistory, child: const Text('내역 확인')),
+            )
+          else if (accounts.value?.isNotEmpty ?? false)
+            TestId(
+              'deposit-submit-button',
               child: BusyFilledButton(label: '입금하기', busy: _busy, onPressed: _submit),
             ),
         ],
+      ),
       ),
     );
   }
@@ -169,7 +218,11 @@ class _DepositDialogState extends ConsumerState<DepositDialog> {
           ),
           const SizedBox(height: 16),
           if (_error != null) ...[
-            FormErrorBanner(id: 'bank-transfer-error', message: _error!),
+            FormErrorBanner(id: 'deposit-error', message: _error!),
+            const SizedBox(height: 16),
+          ],
+          if (_busy) ...[
+            const TestId('deposit-busy', child: Text('처리 중입니다.')),
             const SizedBox(height: 16),
           ],
           Text('은행 계좌', style: Theme.of(context).textTheme.titleSmall),
@@ -177,7 +230,7 @@ class _DepositDialogState extends ConsumerState<DepositDialog> {
             initialValue: selected,
             validator: (_) => selected == null ? '은행 계좌를 선택하세요.' : null,
             builder: (field) => TestId(
-              'bank-transfer-accounts',
+              'deposit-account-select',
               child: RadioGroup<String>(
                 groupValue: selected,
                 onChanged: (v) {
@@ -189,7 +242,7 @@ class _DepositDialogState extends ConsumerState<DepositDialog> {
                   children: [
                     for (final account in accounts)
                       TestId(
-                        'bank-transfer-account-${account.id}',
+                        'deposit-account-${account.id}',
                         child: RadioListTile<String>(
                           value: account.id,
                           title: Text(account.bankName),
@@ -212,7 +265,7 @@ class _DepositDialogState extends ConsumerState<DepositDialog> {
           ),
           const SizedBox(height: 16),
           TestId(
-            'bank-transfer-amount-input',
+            'deposit-amount-input',
             child: TextFormField(
               controller: _amount,
               decoration: const InputDecoration(
@@ -239,14 +292,14 @@ class _NoAccount extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TestId(
-      'bank-transfer-no-account',
+      'deposit-no-account',
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Text('입금하려면 은행 계좌가 필요합니다.', textAlign: TextAlign.center),
           const SizedBox(height: 16),
           TestId(
-            'bank-transfer-create-account',
+            'deposit-go-bankaccounts-button',
             child: FilledButton(
               onPressed: () {
                 final router = GoRouter.of(context);

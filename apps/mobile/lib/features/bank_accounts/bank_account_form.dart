@@ -2,15 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/api_client.dart';
+import '../../core/demo_notice.dart';
+import '../../core/form_check.dart';
 import '../../core/error_text.dart';
 import '../../core/test_id.dart';
 import '../auth/auth_widgets.dart';
 
 String bankAccountErrorMessage(ApiException e) =>
     serverRefusalText(e, base: '은행 계좌를 저장하지 못했습니다');
-
-/// Shown above the form: the user must not type a real bank account.
-const bankAccountDemoNotice = '진짜 자신의 계좌를 만들진 말아주세요! 이건 데모 앱입니다.';
 
 /// The number rule, shown as the hint inside the field. The check below uses
 /// the same numbers.
@@ -50,7 +49,9 @@ class _BankAccountFormState extends State<BankAccountForm> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    // A second tap (or the keyboard's done key) in the same frame sends nothing.
+    if (_busy) return;
+    if (!checkForm(_formKey)) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -78,7 +79,7 @@ class _BankAccountFormState extends State<BankAccountForm> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const _DemoNotice(),
+            const DemoNotice(id: 'bankaccount-demo-warning', text: bankAccountDemoNotice),
             const SizedBox(height: 16),
             if (_error != null) ...[
               FormErrorBanner(id: 'bankaccount-error', message: _error!),
@@ -130,42 +131,6 @@ class _BankAccountFormState extends State<BankAccountForm> {
             TestId(
               'bankaccount-submit',
               child: BusyFilledButton(label: '저장', busy: _busy, onPressed: _submit),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// A short warning above the form. It is not an error, so it is not red.
-class _DemoNotice extends StatelessWidget {
-  const _DemoNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return TestId(
-      'bankaccount-demo-notice',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: colors.tertiaryContainer,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.info_outline, size: 18, color: colors.onTertiaryContainer),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                bankAccountDemoNotice,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: colors.onTertiaryContainer),
-              ),
             ),
           ],
         ),

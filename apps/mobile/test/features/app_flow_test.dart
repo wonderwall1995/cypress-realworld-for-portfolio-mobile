@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -22,11 +24,20 @@ void main() {
       expect(byId('sidenav-home'), findsNothing);
     });
 
-    testWidgets('server not reachable: tells the user', (tester) async {
-      await pumpApp(tester, serverWithAccount()..down = true);
+    testWidgets('server not reachable: says so, and the saved sign-in works again', (tester) async {
+      final server = serverWithAccount()..down = true;
+      await pumpApp(tester, server);
 
-      expect(byId('signin-error'), findsOneWidget);
+      expect(byId('offline'), findsOneWidget);
       expect(find.text('서버에 연결할 수 없습니다.'), findsOneWidget);
+      expect(byId('signin-submit'), findsNothing); // not signed out
+
+      await tapId(tester, 'offline-retry'); // still down
+      expect(byId('offline'), findsOneWidget);
+
+      server.down = false;
+      await tapId(tester, 'offline-retry');
+      expect(byId('nav-transaction-tabs'), findsOneWidget);
     });
 
     testWidgets('valid session: shows the tabs and moves between them', (tester) async {
@@ -53,7 +64,7 @@ void main() {
 
       await tapId(tester, 'signin-submit');
 
-      expect(find.text('아이디를 입력하세요.'), findsOneWidget);
+      expect(find.text('사용자 ID를 입력하세요.'), findsOneWidget);
       expect(find.text('비밀번호를 입력하세요.'), findsOneWidget);
       expect(server.calls, ['GET /checkAuth']);
     });
@@ -65,7 +76,7 @@ void main() {
       await enter(tester, 'signin-password', 'wrong-pw');
       await tapId(tester, 'signin-submit');
 
-      expect(find.text('아이디 또는 비밀번호가 올바르지 않습니다.'), findsOneWidget);
+      expect(find.text('사용자 ID 또는 비밀번호가 올바르지 않습니다.'), findsOneWidget);
       expect(byId('sidenav-home'), findsNothing);
     });
 
@@ -142,7 +153,7 @@ void main() {
       await tapId(tester, 'signup-submit');
       expect(find.text('이름을 입력하세요.'), findsOneWidget);
       expect(find.text('성을 입력하세요.'), findsOneWidget);
-      expect(find.text('아이디를 입력하세요.'), findsOneWidget);
+      expect(find.text('사용자 ID를 입력하세요.'), findsOneWidget);
       expect(find.text('연락처를 입력하세요.'), findsOneWidget);
 
       await fillValid(tester);
@@ -153,7 +164,118 @@ void main() {
       expect(server.calls, ['GET /checkAuth']);
     });
 
-    testWidgets('the order is 성, 이름, 아이디, 연락처, 비밀번호, 비밀번호 확인', (tester) async {
+    testWidgets('warns about what is public and about the password', (tester) async {
+      await pumpApp(tester, serverWithAccount(signedIn: false), size: const Size(360, 1400));
+      await tapId(tester, 'signup');
+      expect(find.descendant(of: byId('signup-name-notice'), matching: find.textContaining('공개됩니다')), findsOneWidget);
+      expect(find.text('비밀번호는 자신이 쓰던 것을 쓰면 안 됩니다!'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    Future<void> signUp(WidgetTester tester, FakeServer server, {String id = 'used'}) async {
+      await pumpApp(tester, server);
+      await tapId(tester, 'signup');
+      await enter(tester, 'signup-last-name', '홍');
+      await enter(tester, 'signup-first-name', '길동');
+      await enter(tester, 'signup-username', id);
+      await enter(tester, 'signup-phone-number', '010-1234-5678');
+      await enter(tester, 'signup-password', 'pw-1234');
+      await enter(tester, 'signup-confirmPassword', 'pw-1234');
+      await tapId(tester, 'signup-submit');
+    }
+
+    Finder error(String text) => find.descendant(of: byId('signup-error'), matching: find.text(text));
+
+    testWidgets('an ID that is used (409): says exactly that and keeps what was typed', (tester) async {
+      final server = serverWithAccount(signedIn: false)..takenUsernames.add('used');
+      await signUp(tester, server);
+      expect(error('이미 사용 중인 사용자 ID입니다'), findsOneWidget);
+      expect(find.text('used'), findsOneWidget);
+      expect(find.textContaining('already taken'), findsNothing);
+
+      await enter(tester, 'signup-username', 'free');
+      await tapId(tester, 'signup-submit');
+      expect(byId('signin-submit'), findsOneWidget);
+    });
+
+    testWidgets('the reason comes into view, also the second time, when the button is far below it', (tester) async {
+      const size = Size(360, 640);
+      final server = serverWithAccount(signedIn: false)..takenUsernames.add('used');
+      await pumpApp(tester, server, size: size);
+      await tapId(tester, 'signup');
+      for (final (id, text) in [
+        ('signup-last-name', '홍'),
+        ('signup-first-name', '길동'),
+        ('signup-username', 'used'),
+        ('signup-phone-number', '010-1234-5678'),
+        ('signup-password', 'pw-1234'),
+        ('signup-confirmPassword', 'pw-1234'),
+      ]) {
+        await tester.ensureVisible(byId(id));
+        await enter(tester, id, text);
+      }
+      for (var n = 0; n < 2; n++) {
+        await tester.ensureVisible(byId('signup-submit'));
+        await tester.pumpAndSettle();
+        // The answer takes a moment, as on a real network: the box of the first try goes away.
+        final answer = Completer<void>();
+        server.gate = (_) => answer.future;
+        await tester.tap(byId('signup-submit'));
+        await tester.pump();
+        expect(byId('signup-error'), findsNothing);
+        answer.complete();
+        await tester.pumpAndSettle();
+        final box = tester.getRect(byId('signup-error'));
+        expect(box.top, greaterThanOrEqualTo(tester.getRect(find.byType(AppBar)).bottom), reason: 'try $n');
+        expect(box.bottom, lessThanOrEqualTo(size.height));
+        expect(find.descendant(of: byId('signup-error'), matching: find.byType(Text)).hitTestable(), findsOneWidget);
+      }
+    });
+
+    testWidgets('a reason that is already in view moves nothing', (tester) async {
+      final server = serverWithAccount(signedIn: false)..takenUsernames.add('used');
+      await signUp(tester, server);
+      expect(tester.state<ScrollableState>(find.byType(Scrollable).first).position.pixels, 0);
+    });
+
+    testWidgets('a 500 of the newer server (JSON) is not blamed on the ID', (tester) async {
+      final server = serverWithAccount(signedIn: false)..signUpServerError = true;
+      await signUp(tester, server);
+      expect(error('회원가입에 실패했습니다. 잠시 뒤 다시 시도해 주세요.'), findsOneWidget);
+      expect(find.textContaining('이미 사용 중'), findsNothing);
+      expect(find.textContaining('internal'), findsNothing);
+    });
+
+    testWidgets('too many requests (the proxy, an HTML page): says so at sign-up and at sign-in', (tester) async {
+      const text = '요청이 많습니다. 잠시 뒤 다시 시도하세요';
+      final server = serverWithAccount(signedIn: false)..rateLimited.addAll({'POST /users', 'POST /login'});
+      await signUp(tester, server);
+      expect(error(text), findsOneWidget);
+      await goBack(tester);
+      await enter(tester, 'signin-username', 'tester');
+      await enter(tester, 'signin-password', 'pw-1234');
+      await tapId(tester, 'signin-submit');
+      expect(find.descendant(of: byId('signin-error'), matching: find.text(text)), findsOneWidget);
+      expect(find.textContaining('429'), findsNothing);
+    });
+
+    testWidgets('an older server (an HTML 500 for an ID that is used): says it may be that', (tester) async {
+      final server = serverWithAccount(signedIn: false)..htmlError.add('POST /users');
+      await pumpApp(tester, server);
+      await tapId(tester, 'signup');
+      await enter(tester, 'signup-last-name', '홍');
+      await enter(tester, 'signup-first-name', '길동');
+      await enter(tester, 'signup-username', 'used');
+      await enter(tester, 'signup-phone-number', '(02) 123-4567');
+      await enter(tester, 'signup-password', 'pw-1234');
+      await enter(tester, 'signup-confirmPassword', 'pw-1234');
+      await tapId(tester, 'signup-submit');
+      expect(find.textContaining('이미 사용 중인 ID일 수 있습니다'), findsOneWidget);
+      expect(find.textContaining('secret'), findsNothing);
+      expect((server.bodies['POST /users'] as Map)['phoneNumber'], '(02) 123-4567');
+    });
+
+    testWidgets('the order is 성, 이름, 사용자 ID, 연락처, 비밀번호, 비밀번호 확인', (tester) async {
       await pumpApp(tester, serverWithAccount(signedIn: false));
       await tapId(tester, 'signup');
 

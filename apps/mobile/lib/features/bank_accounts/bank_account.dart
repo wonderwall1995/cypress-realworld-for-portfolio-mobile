@@ -1,5 +1,9 @@
 import '../transactions/transaction.dart';
 
+/// The most bank accounts one user can have (the server's rule; deleted ones do not
+/// count).
+const maxBankAccounts = 60;
+
 class BankAccount {
   const BankAccount({
     required this.id,
@@ -25,15 +29,14 @@ class BankAccount {
 
   /// What the lists say about the account: the number (last 4 digits only) and,
   /// when the server sends it, the money in the account. For example
-  /// `계좌 번호 ****1234 · 잔액 $25.00`.
+  /// `계좌 번호 ····1234 · 잔액 $25.00`.
   String get describe =>
       balance == null ? '계좌 번호 $maskedAccountNumber' : '계좌 번호 $maskedAccountNumber · 잔액 ${formatUsd(balance!)}';
 
-  /// Shows only the last 4 digits, for example `****1234`.
-  String get maskedAccountNumber {
-    final tail = accountNumber.length <= 4
-        ? accountNumber
-        : accountNumber.substring(accountNumber.length - 4);
-    return '****$tail';
-  }
+  /// Shows only the last 4 digits, for example `····1234`.
+  String get maskedAccountNumber => '····$last4';
+
+  String get last4 => accountNumber.length <= 4
+      ? accountNumber
+      : accountNumber.substring(accountNumber.length - 4);
 }

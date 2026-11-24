@@ -7,23 +7,40 @@ import '../../../core/providers.dart';
 import '../../../core/test_id.dart';
 import '../../auth/auth_widgets.dart';
 
-/// The last step before money moves: "정말 이체하겠습니까?", what will happen, and
-/// "자신의 계정 비밀번호를 입력해주세요." Shows what is about to happen ([lines]), asks for the user's own
-/// password, and checks it on the server first.
+/// How the last step ended.
+enum ConfirmEnd {
+  /// The server approved it.
+  approved,
+
+  /// The user goes back to choose the accounts again.
+  reselect,
+
+  /// No answer came. The user goes to look at the history.
+  unknown,
+}
+
+/// The last step before money moves: "정말 이체하겠습니까?", what will happen
+/// ([lines]), and the user's own password.
 ///
-/// The server must approve before anything else happens: the password is checked,
-/// then [send] runs (the transfer itself). The dialog closes only when both
-/// succeeded, with `true`. When the server refuses, the dialog stays open and says
-/// why, so the user can try again. Returns null when the user cancels.
-Future<bool?> askPasswordAndSend(
+/// Two things happen, one after the other, and the dialog says which one failed:
+/// the password is checked (nothing is sent yet), then [send] runs (the transfer).
+/// The dialog closes by itself only when the server approved. While a request is on
+/// its way it cannot be closed: closing would not stop it.
+///
+/// - The server refuses: the reason is shown and the user can try again. When the
+///   accounts are the reason, the user can also go back and choose again.
+/// - No answer comes: nobody knows whether it was done, so it is not offered again.
+///
+/// Returns null when the user closes it.
+Future<ConfirmEnd?> askPasswordAndSend(
   BuildContext context, {
   required String question,
   required List<String> lines,
   required String confirmLabel,
   required Future<void> Function(String password) send,
-  String idPrefix = 'transfer-confirm',
+  String idPrefix = 'transaction-confirm',
 }) {
-  return showDialog<bool>(
+  return showDialog<ConfirmEnd>(
     context: context,
     barrierDismissible: false,
     builder: (_) => _PasswordConfirmDialog(
@@ -58,6 +75,8 @@ class _PasswordConfirmDialog extends ConsumerStatefulWidget {
 class _PasswordConfirmDialogState extends ConsumerState<_PasswordConfirmDialog> {
   final _password = TextEditingController();
   bool _busy = false;
+  bool _unknown = false;
+  bool _canReselect = false;
   String? _error;
 
   @override
@@ -68,34 +87,60 @@ class _PasswordConfirmDialogState extends ConsumerState<_PasswordConfirmDialog> 
 
   Future<void> _confirm() async {
     // A second tap in the same frame must not send a second request.
-    if (_busy) return;
+    if (_busy || _unknown) return;
     final password = _password.text;
-    if (password.isEmpty) {
-      setState(() => _error = '비밀번호를 입력하세요.');
-      return;
-    }
-    final navigator = Navigator.of(context);
+    if (password.isEmpty) return;
     setState(() {
       _busy = true;
+      _canReselect = false;
       _error = null;
     });
     try {
-      await ref.read(apiClientProvider).verifyPassword(password);
+      if (!await _checkPassword(password)) return;
       await widget.send(password);
-      navigator.pop(true);
+      if (mounted) _close(ConfirmEnd.approved);
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.statusCode == 403 && !e.message.contains('balance')
-            ? '비밀번호가 맞지 않습니다'
-            : serverRefusalText(e, base: '이체하지 못했습니다');
-        // A refused password is typed again; any other reason keeps what was typed
-        // so the user can try again at once.
-        if (e.statusCode == 403) _password.clear();
+        _unknown = e.resultUnknown;
+        _error = serverRefusalText(e, base: '이체하지 못했습니다');
+        if (isWrongPassword(e)) {
+          _password.clear();
+        } else {
+          // 400, 403, 404: the accounts (their owner, their money) are the reason.
+          // 429 is not about the accounts.
+          _canReselect = e.failure == ApiFailure.refused && e.statusCode != 429;
+        }
       });
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Nothing has been sent when this fails.
+  Future<bool> _checkPassword(String password) async {
+    try {
+      await ref.read(apiClientProvider).verifyPassword(password);
+      return true;
+    } on ApiException catch (e) {
+      if (!mounted) return false;
+      setState(() {
+        if (e.statusCode == 403) {
+          _error = '비밀번호가 맞지 않습니다';
+          _password.clear();
+        } else if (e.statusCode == 429) {
+          _error = tooManyRequestsText;
+        } else {
+          _error = '비밀번호를 확인하지 못했습니다. 잠시 뒤 다시 시도하세요';
+        }
+      });
+      return false;
+    }
+  }
+
+  void _close(ConfirmEnd end) {
+    setState(() => _busy = false);
+    Navigator.of(context).pop(end);
   }
 
   @override
@@ -103,7 +148,9 @@ class _PasswordConfirmDialogState extends ConsumerState<_PasswordConfirmDialog> 
     final prefix = widget.idPrefix;
     return TestId(
       '$prefix-dialog',
-      child: AlertDialog(
+      child: PopScope(
+        canPop: !_busy,
+        child: AlertDialog(
         // No title: the question below is the heading, and the room is needed.
         scrollable: true,
         // Less room around the dialog, so the password field is still in view
@@ -132,8 +179,12 @@ class _PasswordConfirmDialogState extends ConsumerState<_PasswordConfirmDialog> 
                 FormErrorBanner(id: '$prefix-error', message: _error!),
                 const SizedBox(height: 8),
               ],
+              if (_busy) ...[
+                TestId('$prefix-busy', child: const Text('처리 중입니다.')),
+                const SizedBox(height: 8),
+              ],
               TestId(
-                '$prefix-password-input',
+                '$prefix-password',
                 child: TextField(
                   controller: _password,
                   obscureText: true,
@@ -142,6 +193,8 @@ class _PasswordConfirmDialogState extends ConsumerState<_PasswordConfirmDialog> 
                   onSubmitted: (_) => _confirm(),
                   decoration: const InputDecoration(
                     labelText: '비밀번호',
+                    // No room for a notice: it is in the empty field.
+                    hintText: '이 데모 앱의 비밀번호',
                     isDense: true,
                     border: OutlineInputBorder(),
                   ),
@@ -155,22 +208,40 @@ class _PasswordConfirmDialogState extends ConsumerState<_PasswordConfirmDialog> 
             '$prefix-cancel',
             child: TextButton(
               onPressed: _busy ? null : () => Navigator.of(context).pop(),
-              child: const Text('취소'),
+              child: Text(_unknown ? '닫기' : '취소'),
             ),
           ),
-          TestId(
-            '$prefix-submit',
-            // Off until something is typed.
-            child: ValueListenableBuilder<TextEditingValue>(
-              valueListenable: _password,
-              builder: (context, value, _) => BusyFilledButton(
-                label: widget.confirmLabel,
-                busy: _busy,
-                onPressed: value.text.isEmpty ? null : _confirm,
+          if (_canReselect)
+            TestId(
+              '$prefix-reselect',
+              child: OutlinedButton(
+                onPressed: _busy ? null : () => _close(ConfirmEnd.reselect),
+                child: const Text('계좌 다시 선택'),
               ),
             ),
-          ),
+          if (_unknown)
+            TestId(
+              '$prefix-check-history',
+              child: FilledButton(
+                onPressed: () => _close(ConfirmEnd.unknown),
+                child: const Text('내역 확인'),
+              ),
+            )
+          else
+            TestId(
+              '$prefix-confirm',
+              // Off until something is typed.
+              child: ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _password,
+                builder: (context, value, _) => BusyFilledButton(
+                  label: widget.confirmLabel,
+                  busy: _busy,
+                  onPressed: value.text.isEmpty ? null : _confirm,
+                ),
+              ),
+            ),
         ],
+      ),
       ),
     );
   }

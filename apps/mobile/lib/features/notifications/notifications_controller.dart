@@ -1,31 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_client.dart';
 import '../../core/providers.dart';
 import '../../core/session.dart';
+import '../money/money_status.dart';
 import 'app_notification.dart';
 
-/// Whether a new money notice should be shown ("금액 변동이 생겼어요. 새로고침을
-/// 해주세요."). Turned on when a new "received" notification arrives after the
-/// first load; turned off by the refresh button.
-class MoneyNoticeController extends Notifier<bool> {
-  @override
-  bool build() {
-    // Another user (or nobody) starts without a notice.
-    ref.watch(sessionProvider.select((s) => s.user?['id']));
-    return false;
-  }
-
-  void show() => state = true;
-
-  void clear() => state = false;
-}
-
-final moneyNoticeProvider = NotifierProvider<MoneyNoticeController, bool>(
-  MoneyNoticeController.new,
-);
-
-/// The signed-in user's unread notifications.
+/// The signed-in user's notifications, the read ones too (paler, like the web).
 ///
 /// The list is loaded when the user signs in or the app starts, when the 알림 tab
 /// is opened, when the user pulls down, and while the app is in view
@@ -36,14 +19,25 @@ class NotificationsController extends AsyncNotifier<List<AppNotification>> {
   /// first load, is news (notifications that were there at the start are not).
   Set<String>? _known;
 
+  /// Pushed by the server, in order. A list that was asked for before a push does
+  /// not have it yet.
+  final List<AppNotification> _pushed = [];
+
+  /// Marked as read here. A list that was asked for before that still has it.
+  final Set<String> _read = {};
+
+  /// Goes up with every load; only the newest one is shown.
+  int _load = 0;
+
   @override
   Future<List<AppNotification>> build() async {
     _known = null;
+    _pushed.clear();
+    _read.clear();
+    _load++;
     final userId = ref.watch(sessionProvider.select((s) => s.user?['id']));
     if (userId == null) return const [];
-    final list = await _fetch();
-    _see(list, announce: false);
-    return list;
+    return _loadList(announce: false);
   }
 
   void _see(List<AppNotification> list, {required bool announce}) {
@@ -51,41 +45,62 @@ class NotificationsController extends AsyncNotifier<List<AppNotification>> {
     if (announce &&
         known != null &&
         list.any(
-          (n) => n.kind == NotificationKind.received && !known.contains(n.id),
+          (n) =>
+              n.kind == NotificationKind.received &&
+              !n.isRead &&
+              !known.contains(n.id),
         )) {
-      ref.read(moneyNoticeProvider.notifier).show();
+      ref.read(moneyStatusProvider.notifier).changed();
     }
     (_known ??= {}).addAll(list.map((n) => n.id));
   }
 
   /// A notification the server pushed. Added at the top unless it is already there.
   void receive(Map<String, dynamic> json) {
-    final notification = AppNotification.fromJson(json);
+    final AppNotification? notification;
+    try {
+      notification = readAnswer(() => AppNotification.fromJson(json));
+    } on ApiException {
+      return; // not in the agreed shape
+    }
+    if (notification == null || _read.contains(notification.id)) return;
+    _pushed.add(notification);
     final current = state.value;
-    if (notification == null || current == null) return;
-    if (current.any((n) => n.id == notification.id)) return;
+    if (current == null) return; // the first load adds it
+    if (current.any((n) => n.id == notification!.id)) return;
     _see([notification], announce: true);
     state = AsyncData([notification, ...current]);
   }
 
-  Future<List<AppNotification>> _fetch() async {
+  /// The server's list, with what happened here while it was on its way.
+  Future<List<AppNotification>> _loadList({required bool announce}) async {
+    final pushedBefore = _pushed.length;
     final raw = await ref.read(apiClientProvider).getNotifications();
     // A kind the app does not know is left out.
-    return raw
-        .map(AppNotification.fromJson)
-        .whereType<AppNotification>()
-        .toList();
+    final list = readAnswer(
+      () => raw.map(AppNotification.fromJson).whereType<AppNotification>().toList(),
+    );
+    _see(list, announce: announce);
+    final ids = {for (final n in list) n.id};
+    final pushed = _pushed.skip(pushedBefore).where((n) => ids.add(n.id)).toList();
+    _see(pushed, announce: true);
+    return [
+      for (final n in [...pushed.reversed, ...list])
+        _read.contains(n.id) ? n.asRead() : n,
+    ];
   }
 
   /// Loads again without the loading state. Returns false when it failed; the
   /// old list stays then.
   Future<bool> refresh() async {
+    final load = ++_load;
     try {
-      final list = await _fetch();
-      _see(list, announce: true);
+      final list = await _loadList(announce: true);
+      if (!ref.mounted || load != _load) return true;
       state = AsyncData(list);
       return true;
     } on ApiException catch (e, stack) {
+      if (!ref.mounted || load != _load) return true;
       if (!state.hasValue) state = AsyncError(e, stack);
       return false;
     }
@@ -93,18 +108,27 @@ class NotificationsController extends AsyncNotifier<List<AppNotification>> {
 
   /// Loads the first time again after an error (shows the loading state).
   Future<void> retry() async {
+    final load = ++_load;
     state = const AsyncLoading();
-    state = await AsyncValue.guard(() async {
-      final list = await _fetch();
-      _see(list, announce: false);
-      return list;
-    });
+    final result = await AsyncValue.guard(() => _loadList(announce: false));
+    if (ref.mounted && load == _load) state = result;
   }
 
   /// Throws [ApiException] when the server refuses.
   Future<void> markRead(String id) async {
-    await ref.read(apiClientProvider).markNotificationRead(id);
-    state = AsyncData([...?state.value]..removeWhere((n) => n.id == id));
+    try {
+      await ref.read(apiClientProvider).markNotificationRead(id);
+    } on ApiException catch (e) {
+      // It may have been done, or be read already somewhere else.
+      if (ref.mounted && e.failure != ApiFailure.notSent) unawaited(refresh());
+      rethrow;
+    }
+    if (!ref.mounted) return;
+    _read.add(id);
+    state = AsyncData([
+      for (final n in state.value ?? const <AppNotification>[])
+        n.id == id ? n.asRead() : n,
+    ]);
   }
 }
 
@@ -118,5 +142,11 @@ final notificationsProvider =
 
 /// How many unread notifications there are (0 while loading or on error).
 final unreadCountProvider = Provider.autoDispose<int>(
-  (ref) => ref.watch(notificationsProvider).value?.length ?? 0,
+  (ref) =>
+      ref
+          .watch(notificationsProvider)
+          .value
+          ?.where((n) => !n.isRead)
+          .length ??
+      0,
 );

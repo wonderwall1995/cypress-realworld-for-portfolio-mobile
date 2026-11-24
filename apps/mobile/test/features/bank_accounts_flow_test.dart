@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -13,24 +15,40 @@ Future<void> fillAccountForm(
   await enter(tester, 'bankaccount-accountNumber-input', number);
 }
 
+/// The "은행 계좌 만들기" screen, from the tab.
+Future<void> openNewAccount(WidgetTester tester) async {
+  await tapId(tester, 'sidenav-bankaccounts');
+  await tapId(tester, 'bankaccount-new');
+}
+
+Finder get yellowMenu => byId('sidenav-bankaccounts-warning');
+
 void main() {
-  group('first-time setup (no bank account)', () {
-    testWidgets('is shown after sign-in and walks through 3 steps', (tester) async {
+  group('a user without a bank account', () {
+    testWidgets('is not stopped: home, the tabs, the settings and sign-out work', (tester) async {
       final server = FakeServer(signedIn: true);
       await pumpApp(tester, server);
 
-      // Step 1: welcome
-      expect(byId('user-onboarding-dialog'), findsOneWidget);
-      expect(find.descendant(of: byId('user-onboarding-dialog-title'), matching: find.text('시작하기')), findsOneWidget);
-      expect(byId('sidenav-home'), findsNothing);
+      expect(byId('nav-transaction-tabs'), findsOneWidget);
+      await tapId(tester, 'sidenav-notifications');
+      expect(byId('notifications-empty'), findsOneWidget);
+      await tapId(tester, 'sidenav-my-account');
+      expect(byId('sidenav-user-balance'), findsOneWidget);
+      await tapId(tester, 'sidenav-more');
+      await tapId(tester, 'sidenav-signout');
+      expect(byId('signin-submit'), findsOneWidget);
+    });
 
-      await tapId(tester, 'user-onboarding-next');
+    testWidgets('the 은행 계좌 menu is yellow, without text, until there is an account', (tester) async {
+      final server = FakeServer(signedIn: true);
+      await pumpApp(tester, server);
 
-      // Step 2: create the account. There is no "next" button here.
-      expect(find.descendant(of: byId('user-onboarding-dialog-title'), matching: find.text('은행 계좌 만들기')), findsOneWidget);
-      expect(byId('bankaccount-form'), findsOneWidget);
-      expect(byId('user-onboarding-next'), findsNothing);
+      expect(yellowMenu, findsOneWidget);
+      final box = tester.widget<Container>(yellowMenu).decoration! as BoxDecoration;
+      expect(box.color, const Color(0xFFFFD54F));
+      expect(find.text('계좌가 없습니다.'), findsNothing);
 
+      await openNewAccount(tester);
       await fillAccountForm(tester);
       await tapId(tester, 'bankaccount-submit');
 
@@ -38,24 +56,126 @@ void main() {
         'bankName': 'Test Bank Two',
         'accountNumber': '555666777',
       });
-
-      // Step 3: finished
-      expect(find.descendant(of: byId('user-onboarding-dialog-title'), matching: find.text('완료')), findsOneWidget);
-      expect(byId('sidenav-home'), findsNothing);
-
-      await tapId(tester, 'user-onboarding-next');
-
-      // Home, with the new account in the list
-      expect(byId('user-onboarding-dialog'), findsNothing);
-      expect(byId('nav-transaction-tabs'), findsOneWidget);
-      await tapId(tester, 'sidenav-bankaccounts');
+      // Back on the list, which has the new account.
       expect(find.text('Test Bank Two'), findsOneWidget);
+      expect(yellowMenu, findsNothing);
+    });
+
+    testWidgets('the menu still opens its tab when it is yellow', (tester) async {
+      await pumpApp(tester, FakeServer(signedIn: true));
+      await tapId(tester, 'sidenav-bankaccounts');
+      expect(find.descendant(of: byId('bankaccount-list-empty'), matching: find.text('등록된 은행 계좌가 없습니다.')), findsOneWidget);
+    });
+
+    testWidgets('a list that cannot be read is not "no account"', (tester) async {
+      await pumpApp(tester, FakeServer(signedIn: true)..failAccountList = true);
+
+      expect(byId('nav-transaction-tabs'), findsOneWidget);
+      expect(yellowMenu, findsNothing);
+      await tapId(tester, 'sidenav-bankaccounts');
+      expect(byId('bankaccount-load-error'), findsOneWidget);
+    });
+
+    testWidgets('it is read once, not again and again', (tester) async {
+      final server = FakeServer(signedIn: true)..failAccountList = true;
+      await pumpApp(tester, server);
+      await tester.pump(const Duration(seconds: 60));
+      expect(server.calls.where((c) => c == 'GET /bankAccounts'), hasLength(1));
+    });
+
+    testWidgets('only deleted accounts count as none', (tester) async {
+      await pumpApp(tester, FakeServer(signedIn: true, accounts: [testAccount('b1', isDeleted: true)]));
+      expect(yellowMenu, findsOneWidget);
+    });
+
+    testWidgets('with an account the menu is not yellow', (tester) async {
+      await pumpApp(tester, FakeServer(signedIn: true, accounts: [testAccount('b1')]));
+      expect(yellowMenu, findsNothing);
+    });
+
+    testWidgets('이체 says an account is needed and leads to making one', (tester) async {
+      final server = FakeServer(signedIn: true)..users.add(testOtherUser('u2', 'Bob', 'Test'));
+      await pumpApp(tester, server);
+      await tapId(tester, 'sidenav-my-account');
+      await tapId(tester, 'sidenav-transfer');
+      await tapId(tester, 'user-list-item-u2');
+
+      expect(byId('transaction-create-no-account'), findsOneWidget);
+      await tapId(tester, 'transaction-create-make-account');
+      await fillAccountForm(tester);
+      await tapId(tester, 'bankaccount-submit');
+
+      // Back on the transfer, which has the account now.
+      expect(byId('transaction-create-no-account'), findsNothing);
+      expect(find.textContaining('Test Bank Two'), findsOneWidget);
+    });
+
+    testWidgets('making one can be cancelled', (tester) async {
+      await pumpApp(tester, FakeServer(signedIn: true));
+      await openNewAccount(tester);
+      await goBack(tester);
+      expect(byId('sidenav-home'), findsOneWidget);
+    });
+  });
+
+  group('making an account', () {
+    testWidgets('a second tap sends nothing', (tester) async {
+      final server = FakeServer(signedIn: true);
+      await pumpApp(tester, server);
+      await openNewAccount(tester);
+      await fillAccountForm(tester);
+      await tester.tap(byId('bankaccount-submit'));
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(server.calls.where((c) => c == 'POST /bankAccounts'), hasLength(1));
+    });
+
+    testWidgets('leaving while it is on its way closes no other screen', (tester) async {
+      final server = FakeServer(signedIn: true);
+      await pumpApp(tester, server);
+      await openNewAccount(tester);
+      await fillAccountForm(tester);
+      final hold = Completer<void>();
+      server.gate = (key) => key == 'POST /bankAccounts' ? hold.future : null;
+      await tester.tap(byId('bankaccount-submit'));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await tester.tap(find.byType(BackButton));
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await tapId(tester, 'sidenav-more'); // a sheet that must stay open
+      hold.complete();
+      await tester.pumpAndSettle();
+
+      expect(byId('sidenav-signout'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('60 accounts: cannot make another, and says why', (tester) async {
+      final server = FakeServer(signedIn: true, accounts: [for (var i = 0; i < 60; i++) testAccount('b$i')]);
+      await pumpApp(tester, server);
+      await tapId(tester, 'sidenav-bankaccounts');
+
+      expect(find.descendant(of: byId('bankaccount-limit'), matching: find.text('은행 계좌는 최대 60개까지 만들 수 있습니다.')), findsOneWidget);
+      final button = tester.widget<TextButton>(find.descendant(of: byId('bankaccount-new'), matching: find.bySubtype<TextButton>()));
+      expect(button.onPressed, isNull);
+    });
+
+    testWidgets('59 accounts: can', (tester) async {
+      final server = FakeServer(signedIn: true, accounts: [for (var i = 0; i < 59; i++) testAccount('b$i')]);
+      await pumpApp(tester, server);
+      await tapId(tester, 'sidenav-bankaccounts');
+      expect(byId('bankaccount-limit'), findsNothing);
+      await tapId(tester, 'bankaccount-new');
+      expect(byId('bankaccount-form'), findsOneWidget);
     });
 
     testWidgets('checks the form with the web rules', (tester) async {
       final server = FakeServer(signedIn: true);
       await pumpApp(tester, server);
-      await tapId(tester, 'user-onboarding-next');
+      await openNewAccount(tester);
 
       await tapId(tester, 'bankaccount-submit');
       expect(find.text('은행 이름을 입력하세요.'), findsOneWidget);
@@ -77,7 +197,7 @@ void main() {
     testWidgets('the account number must be digits only', (tester) async {
       final server = FakeServer(signedIn: true);
       await pumpApp(tester, server);
-      await tapId(tester, 'user-onboarding-next');
+      await openNewAccount(tester);
 
       // The right length, but letters: this passed before the digit check.
       await fillAccountForm(tester, number: 'abcdefghij');
@@ -100,14 +220,15 @@ void main() {
       await pumpApp(tester, server);
       await tapId(tester, 'sidenav-bankaccounts');
 
-      expect(find.text('계좌 번호 ****6789 · 잔액 \$1,234.56'), findsOneWidget);
-      expect(find.text('계좌 번호 ****6789'), findsOneWidget);
+      expect(find.descendant(of: byId('bankaccount-balance-b1'), matching: find.text('잔액 \$1,234.56')), findsOneWidget);
+      expect(find.descendant(of: byId('bankaccount-account-number-b2'), matching: find.text('계좌 번호 ····6789')), findsOneWidget);
+      expect(byId('bankaccount-balance-b2'), findsNothing); // not sent: not guessed
     });
 
     testWidgets('there is no routing number field, and none is sent', (tester) async {
       final server = FakeServer(signedIn: true);
       await pumpApp(tester, server);
-      await tapId(tester, 'user-onboarding-next');
+      await openNewAccount(tester);
 
       expect(byId('bankaccount-routingNumber-input'), findsNothing);
       expect(find.text('라우팅 번호'), findsNothing);
@@ -121,7 +242,7 @@ void main() {
     testWidgets('a short bank name is saved (there is no minimum length)', (tester) async {
       final server = FakeServer(signedIn: true);
       await pumpApp(tester, server);
-      await tapId(tester, 'user-onboarding-next');
+      await openNewAccount(tester);
 
       await fillAccountForm(tester, bank: 'K');
       await tapId(tester, 'bankaccount-submit');
@@ -132,7 +253,7 @@ void main() {
     testWidgets('an empty bank name is still refused', (tester) async {
       final server = FakeServer(signedIn: true);
       await pumpApp(tester, server);
-      await tapId(tester, 'user-onboarding-next');
+      await openNewAccount(tester);
 
       await fillAccountForm(tester, bank: '   ');
       await tapId(tester, 'bankaccount-submit');
@@ -143,7 +264,7 @@ void main() {
 
     testWidgets('the account number rule is shown as a hint inside the field', (tester) async {
       await pumpApp(tester, FakeServer(signedIn: true));
-      await tapId(tester, 'user-onboarding-next');
+      await openNewAccount(tester);
 
       String? hintOf(String id) => tester
           .widget<TextField>(find.descendant(of: byId(id), matching: find.byType(TextField)))
@@ -156,12 +277,12 @@ void main() {
       expect(account.decoration!.floatingLabelBehavior, FloatingLabelBehavior.always);
     });
 
-    testWidgets('the form warns not to enter a real account (first-time setup)', (tester) async {
+    testWidgets('the form warns not to enter a real account', (tester) async {
       await pumpApp(tester, FakeServer(signedIn: true));
-      await tapId(tester, 'user-onboarding-next');
+      await openNewAccount(tester);
 
       expect(
-        find.descendant(of: byId('bankaccount-demo-notice'), matching: find.text('진짜 자신의 계좌를 만들진 말아주세요! 이건 데모 앱입니다.')),
+        find.descendant(of: byId('bankaccount-demo-warning'), matching: find.text('진짜 자신의 계좌를 만들진 말아주세요! 이건 데모 앱입니다.')),
         findsOneWidget,
       );
     });
@@ -172,59 +293,20 @@ void main() {
       await tapId(tester, 'bankaccount-new');
 
       expect(
-        find.descendant(of: byId('bankaccount-demo-notice'), matching: find.text('진짜 자신의 계좌를 만들진 말아주세요! 이건 데모 앱입니다.')),
+        find.descendant(of: byId('bankaccount-demo-warning'), matching: find.text('진짜 자신의 계좌를 만들진 말아주세요! 이건 데모 앱입니다.')),
         findsOneWidget,
       );
     });
 
-    testWidgets('a server refusal shows an error and stays on step 2', (tester) async {
+    testWidgets('a server refusal shows an error and stays on the form', (tester) async {
       await pumpApp(tester, FakeServer(signedIn: true)..failAccountCreate = true);
-      await tapId(tester, 'user-onboarding-next');
+      await openNewAccount(tester);
 
       await fillAccountForm(tester);
       await tapId(tester, 'bankaccount-submit');
 
       expect(byId('bankaccount-error'), findsOneWidget);
       expect(byId('bankaccount-form'), findsOneWidget);
-      expect(find.descendant(of: byId('user-onboarding-dialog-title'), matching: find.text('완료')), findsNothing);
-    });
-
-    // The server keeps deleted accounts and returns them with isDeleted: true.
-    testWidgets('is shown when the user has only deleted accounts', (tester) async {
-      await pumpApp(
-        tester,
-        FakeServer(signedIn: true, accounts: [testAccount('b1', isDeleted: true)]),
-      );
-
-      expect(byId('user-onboarding-dialog'), findsOneWidget);
-      expect(byId('sidenav-home'), findsNothing);
-    });
-
-    testWidgets('the logout button signs out', (tester) async {
-      final server = FakeServer(signedIn: true);
-      await pumpApp(tester, server);
-
-      await tapId(tester, 'user-onboarding-logout');
-
-      expect(server.calls, contains('POST /logout'));
-      expect(byId('signin-submit'), findsOneWidget);
-    });
-
-    testWidgets('is not shown when the user has a bank account', (tester) async {
-      await pumpApp(tester, FakeServer(signedIn: true, accounts: [testAccount('b1')]));
-
-      expect(byId('user-onboarding-dialog'), findsNothing);
-      expect(byId('nav-transaction-tabs'), findsOneWidget);
-    });
-
-    testWidgets('is skipped when the account list cannot be loaded', (tester) async {
-      await pumpApp(tester, FakeServer(signedIn: true)..failAccountList = true);
-
-      expect(byId('user-onboarding-dialog'), findsNothing);
-      expect(byId('nav-transaction-tabs'), findsOneWidget);
-
-      await tapId(tester, 'sidenav-bankaccounts');
-      expect(byId('bankaccount-load-error'), findsOneWidget);
     });
   });
 
@@ -265,7 +347,7 @@ void main() {
       expect(byId('bankaccount-list-item-b1'), findsOneWidget);
       expect(byId('bankaccount-list-item-b2'), findsOneWidget);
       expect(find.text('First Test Bank'), findsOneWidget);
-      expect(find.text('계좌 번호 ****3333'), findsOneWidget);
+      expect(find.text('계좌 번호 ····3333'), findsOneWidget);
       expect(find.textContaining('111122223333'), findsNothing);
     });
 
@@ -324,9 +406,7 @@ void main() {
       expect(byId('bankaccount-list-item-b2'), findsOneWidget);
     });
 
-    // Same as the web: the setup opens whenever the user has no bank account
-    // and has not finished it in this session.
-    testWidgets('deleting the last account opens the setup (same as the web)', (tester) async {
+    testWidgets('the last account can be deleted and the app goes on', (tester) async {
       final server = FakeServer(signedIn: true, accounts: [testAccount('b1')]);
       await pumpApp(tester, server);
       await tapId(tester, 'sidenav-bankaccounts');
@@ -336,26 +416,31 @@ void main() {
       await tapId(tester, 'bankaccount-delete-confirm');
 
       expect(server.activeAccounts, isEmpty);
-      expect(byId('user-onboarding-dialog'), findsOneWidget);
+      expect(find.text('등록된 은행 계좌가 없습니다.'), findsOneWidget);
+      expect(yellowMenu, findsOneWidget);
+      await tapId(tester, 'sidenav-home');
+      expect(byId('nav-transaction-tabs'), findsOneWidget);
     });
 
-    testWidgets('after finishing the setup, deleting the last account does not reopen it',
-        (tester) async {
-      final server = FakeServer(signedIn: true);
+    testWidgets('an account already deleted somewhere else goes away, with the reason', (tester) async {
+      final server = twoAccounts()
+        ..accountDeleteStatus = 404
+        ..accountDeleteMessage = 'bank account not found';
       await pumpApp(tester, server);
-      await tapId(tester, 'user-onboarding-next');
-      await fillAccountForm(tester);
-      await tapId(tester, 'bankaccount-submit');
-      await tapId(tester, 'user-onboarding-next'); // 완료
-
       await tapId(tester, 'sidenav-bankaccounts');
-      await tester.tap(byId('bankaccount-delete'));
+      server.accounts.removeWhere((a) => a['id'] == 'b1');
+
+      await tester.tap(find.descendant(of: byId('bankaccount-list-item-b1'), matching: byId('bankaccount-delete')));
       await tester.pumpAndSettle();
       await tapId(tester, 'bankaccount-delete-confirm');
 
-      expect(server.activeAccounts, isEmpty);
-      expect(byId('user-onboarding-dialog'), findsNothing);
-      expect(find.text('등록된 은행 계좌가 없습니다.'), findsOneWidget);
+      expect(find.text('은행 계좌를 찾을 수 없습니다'), findsOneWidget);
+      expect(byId('bankaccount-list-item-b1'), findsNothing);
+
+      // Opening the tab again clears the old reason.
+      await tapId(tester, 'sidenav-home');
+      await tapId(tester, 'sidenav-bankaccounts');
+      expect(byId('bankaccount-notice'), findsNothing);
     });
 
     testWidgets('a failed delete keeps the account and tells the user', (tester) async {
@@ -369,8 +454,8 @@ void main() {
 
       // The account stays, and the reason is above the list (not a snack bar).
       expect(byId('bankaccount-list-item-b1'), findsOneWidget);
-      expect(find.descendant(of: byId('bankaccount-delete-error'), matching: find.text('은행 계좌를 삭제하지 못했습니다 (boom)')), findsOneWidget);
-      expect(tester.getRect(byId('bankaccount-delete-error')).bottom, lessThanOrEqualTo(tester.getRect(byId('bankaccount-list')).top));
+      expect(find.descendant(of: byId('bankaccount-notice'), matching: find.text('응답을 받지 못해 처리 결과를 확인할 수 없습니다.')), findsOneWidget);
+      expect(tester.getRect(byId('bankaccount-notice')).bottom, lessThanOrEqualTo(tester.getRect(byId('bankaccount-list')).top));
       expect(byId('alert-bar-error'), findsNothing);
     });
 
@@ -422,17 +507,6 @@ void main() {
 
       expect(find.text('New Shape Bank'), findsOneWidget);
       expect(find.text('Hidden Bank'), findsNothing);
-    });
-
-    testWidgets('the first-time setup goes on after creating an account', (tester) async {
-      final server = FakeServer(signedIn: true);
-      await pumpApp(tester, server);
-      await tapId(tester, 'user-onboarding-next');
-
-      await fillAccountForm(tester);
-      await tapId(tester, 'bankaccount-submit');
-
-      expect(find.descendant(of: byId('user-onboarding-dialog-title'), matching: find.text('완료')), findsOneWidget);
     });
   });
 }

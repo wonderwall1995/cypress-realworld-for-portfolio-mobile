@@ -13,6 +13,6 @@ class OtherAccount {
   final String bankName;
   final String last4;
 
-  /// For example `계좌 번호 ****2222`.
-  String get describe => '계좌 번호 ****$last4';
+  /// For example `계좌 번호 ····2222`.
+  String get describe => '계좌 번호 ····$last4';
 }

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
+import '../../core/demo_notice.dart';
+import '../../core/form_check.dart';
 import '../../core/providers.dart';
 import '../../core/test_id.dart';
 import '../about/original_project_link.dart';
@@ -42,7 +44,9 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
       (v == null || v.trim().isEmpty) ? message : null;
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    // A second tap (or the keyboard's done key) in the same frame sends nothing.
+    if (_busy) return;
+    if (!checkForm(_formKey)) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -63,6 +67,8 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
           content: TestId('alert-bar-success', child: Text('회원가입이 완료되었습니다. 로그인해 주세요.')),
         ),
       );
+      // The user may have left while it was on its way.
+      if (!mounted) return;
       if (router.canPop()) {
         router.pop();
       } else {
@@ -107,6 +113,13 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                       FormErrorBanner(id: 'signup-error', message: _error!),
                       const SizedBox(height: 16),
                     ],
+                    const DemoNotice(id: 'signup-demo-notice', text: signUpDemoNotice),
+                    const SizedBox(height: 12),
+                    const TestId(
+                      'signup-name-notice',
+                      child: Text('성과 이름이 웹 데모 시연 특성상 공개됩니다. 주의해주세요!'),
+                    ),
+                    const SizedBox(height: 12),
                     TestId(
                       'signup-last-name',
                       child: TextFormField(
@@ -138,12 +151,14 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                       child: TextFormField(
                         controller: _username,
                         decoration: const InputDecoration(
-                          labelText: '아이디',
+                          labelText: '사용자 ID',
+                          hintText: '평소 쓰시는 ID는 넣지 마세요!',
+                          floatingLabelBehavior: FloatingLabelBehavior.always,
                           border: OutlineInputBorder(),
                         ),
                         textInputAction: TextInputAction.next,
                         autocorrect: false,
-                        validator: (v) => _required(v, '아이디를 입력하세요.'),
+                        validator: (v) => _required(v, '사용자 ID를 입력하세요.'),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -167,9 +182,13 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                       'signup-password',
                       child: TextFormField(
                         controller: _password,
-                        decoration: const InputDecoration(
-                          labelText: '비밀번호',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: '비밀번호 (4자 이상)',
+                          hintText: '비밀번호는 자신이 쓰던 것을 쓰면 안 됩니다!',
+                          hintMaxLines: 2,
+                          hintStyle: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 13),
+                          floatingLabelBehavior: FloatingLabelBehavior.always,
+                          border: const OutlineInputBorder(),
                         ),
                         obscureText: true,
                         textInputAction: TextInputAction.next,

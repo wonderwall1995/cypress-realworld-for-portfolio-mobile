@@ -68,8 +68,8 @@ void main() {
 
       final date = tester.getTopLeft(byId('transaction-date-d1')).dy;
       final name = tester.getTopLeft(byId('transaction-sender-d1')).dy;
-      final sentence = tester.getTopLeft(byId('transaction-bank-sentence-d1')).dy;
-      final likes = tester.getTopLeft(find.descendant(of: byId('transaction-item-d1'), matching: find.byIcon(Icons.favorite_border))).dy;
+      final sentence = tester.getTopLeft(byId('transaction-bank-line-d1')).dy;
+      final likes = tester.getTopLeft(find.descendant(of: byId('transaction-item-d1'), matching: find.byIcon(Icons.thumb_up_outlined))).dy;
       expect(date, lessThan(name));
       expect(name, lessThan(sentence));
       expect(sentence, lessThan(likes));

@@ -7,6 +7,7 @@ import '../../core/api_client.dart';
 import '../../core/error_text.dart';
 import '../auth/auth_widgets.dart';
 import '../../core/test_id.dart';
+import '../transactions/transaction.dart';
 import 'bank_account.dart';
 import 'bank_accounts_controller.dart';
 
@@ -19,6 +20,8 @@ class BankAccountsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final accounts = ref.watch(bankAccountsProvider);
     final deleteError = ref.watch(bankAccountDeleteErrorProvider);
+    // At the limit the server refuses a new account, so it is not offered.
+    final atLimit = (accounts.value?.length ?? 0) >= maxBankAccounts;
 
     return Scaffold(
       appBar: AppBar(
@@ -27,7 +30,7 @@ class BankAccountsPage extends ConsumerWidget {
           TestId(
             'bankaccount-new',
             child: TextButton.icon(
-              onPressed: () => context.push('/bankaccounts/new'),
+              onPressed: atLimit ? null : () => context.push('/bankaccounts/new'),
               icon: const Icon(Icons.add),
               label: const Text('만들기'),
             ),
@@ -44,15 +47,25 @@ class BankAccountsPage extends ConsumerWidget {
         ),
         data: (list) => Column(
           children: [
+            if (atLimit)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: TestId(
+                  'bankaccount-limit',
+                  child: Text('은행 계좌는 최대 $maxBankAccounts개까지 만들 수 있습니다.'),
+                ),
+              ),
             // The reason the server gave, above the list. The account stays in it.
             if (deleteError != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: FormErrorBanner(id: 'bankaccount-delete-error', message: deleteError),
+                child: FormErrorBanner(id: 'bankaccount-notice', message: deleteError),
               ),
             Expanded(
               child: list.isEmpty
-                  ? const Center(child: Text('등록된 은행 계좌가 없습니다.'))
+                  ? const Center(
+                      child: TestId('bankaccount-list-empty', child: Text('등록된 은행 계좌가 없습니다.')),
+                    )
                   : TestId(
                       'bankaccount-list',
                       child: ListView.separated(
@@ -92,12 +105,21 @@ class _LoadError extends StatelessWidget {
   }
 }
 
-class _BankAccountTile extends ConsumerWidget {
+class _BankAccountTile extends ConsumerStatefulWidget {
   const _BankAccountTile({required this.account});
 
   final BankAccount account;
 
-  Future<void> _confirmAndDelete(BuildContext context, WidgetRef ref) async {
+  @override
+  ConsumerState<_BankAccountTile> createState() => _BankAccountTileState();
+}
+
+class _BankAccountTileState extends ConsumerState<_BankAccountTile> {
+  bool _busy = false;
+
+  Future<void> _confirmAndDelete() async {
+    if (_busy) return;
+    final account = widget.account;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -121,40 +143,52 @@ class _BankAccountTile extends ConsumerWidget {
         ],
       ),
     );
-    if (confirmed != true) return;
+    if (confirmed != true || !mounted) return;
 
     final errors = ref.read(bankAccountDeleteErrorProvider.notifier);
     errors.set(null);
+    setState(() => _busy = true);
     try {
       await ref.read(bankAccountsProvider.notifier).remove(account.id);
     } on ApiException catch (e) {
-      errors.set(serverRefusalText(e, base: '은행 계좌를 삭제하지 못했습니다'));
+      // After a 401 the user is already somewhere else.
+      if (mounted) errors.set(serverRefusalText(e, base: '은행 계좌를 삭제하지 못했습니다'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final account = widget.account;
     final hasMoney = (account.balance ?? 0) != 0;
     return TestId(
       'bankaccount-list-item-${account.id}',
       child: ListTile(
         leading: const Icon(Icons.account_balance_outlined),
         title: Text(account.bankName),
-        subtitle: hasMoney
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(account.describe),
-                  const TestId('bankaccount-delete-locked', child: Text('잔액이 있는 계좌는 삭제할 수 없습니다.')),
-                ],
-              )
-            : Text(account.describe),
-        isThreeLine: hasMoney,
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TestId(
+              'bankaccount-account-number-${account.id}',
+              child: Text('계좌 번호 ${account.maskedAccountNumber}'),
+            ),
+            if (account.balance != null)
+              TestId(
+                'bankaccount-balance-${account.id}',
+                child: Text('잔액 ${formatUsd(account.balance!)}'),
+              ),
+            if (hasMoney)
+              const TestId('bankaccount-delete-locked', child: Text('잔액이 있는 계좌는 삭제할 수 없습니다.')),
+          ],
+        ),
+        isThreeLine: account.balance != null,
         trailing: TestId(
           'bankaccount-delete',
           child: TextButton(
             // The server refuses to delete an account that holds money (400).
-            onPressed: hasMoney ? null : () => _confirmAndDelete(context, ref),
+            onPressed: hasMoney || _busy ? null : _confirmAndDelete,
             child: const Text('삭제'),
           ),
         ),

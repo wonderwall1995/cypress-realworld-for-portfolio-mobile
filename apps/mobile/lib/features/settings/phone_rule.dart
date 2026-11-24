@@ -2,9 +2,9 @@
 /// repo's shared package), the same for sign-up and for the settings screen.
 ///
 /// Digits, spaces, hyphens and brackets, with an optional leading "+". From 7
-/// to 20 characters; it starts and ends with a digit. Examples that pass:
+/// to 20 characters; it starts with a digit or a bracket and ends with a digit. Examples that pass:
 /// `010-1234-5678`, `+82 10-1234-5678`, `(02) 123-4567`.
-final RegExp serverPhoneNumberPattern = RegExp(r'^\+?\d[\d\s()-]{5,18}\d$');
+final RegExp serverPhoneNumberPattern = RegExp(r'^(?:\+?\d[\d\s()-]{5,18}|\(\d[\d\s()-]{4,17})\d$');
 
 /// Returns a Korean message, or null when the number is fine.
 ///

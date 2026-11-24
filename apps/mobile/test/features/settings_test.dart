@@ -1,6 +1,7 @@
 import 'package:cypress_realworld_for_personal_portfolio_mobile/features/settings/phone_rule.dart';
 import 'package:cypress_realworld_for_personal_portfolio_mobile/features/settings/settings_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/app_harness.dart';
@@ -168,11 +169,11 @@ void main() {
         'phoneNumber': '010-1234-5678',
         'defaultPrivacyLevel': 'private',
       });
-      final result = tester.widget<Text>(find.descendant(of: byId('user-settings-result'), matching: find.byType(Text)));
+      final result = tester.widget<Text>(find.descendant(of: byId('user-settings-message'), matching: find.byType(Text)));
       expect(result.data, '설정 저장 성공');
-      expect(result.style?.color, Colors.green.shade700);
+      expect(result.style?.color, Colors.green.shade800);
       // The result sits above the 저장 button.
-      expect(tester.getRect(byId('user-settings-result')).bottom, lessThanOrEqualTo(tester.getRect(byId('user-settings-submit')).top));
+      expect(tester.getRect(byId('user-settings-message')).bottom, lessThanOrEqualTo(tester.getRect(byId('user-settings-submit')).top));
       // It stays on the settings screen.
       expect(byId('user-settings-form'), findsOneWidget);
     });
@@ -225,7 +226,7 @@ void main() {
       await fill(tester, email: 'keep@example.test');
       await saveAndLookAtToast(tester);
 
-      expect(find.text('설정 저장 실패: 입력한 내용을 확인해 주세요.'), findsOneWidget);
+      expect(find.text('설정 저장 실패: 응답을 받지 못해 처리 결과를 확인할 수 없습니다.'), findsOneWidget);
       expect(find.text('설정 저장 성공'), findsNothing);
       expect(textOf(tester, 'user-settings-email-input'), 'keep@example.test');
     });
@@ -253,6 +254,75 @@ void main() {
       await tapId(tester, 'user-settings-submit');
 
       expect(find.text('설정 저장 실패: 서버에 연결할 수 없습니다.'), findsOneWidget);
+    });
+  });
+
+  group('privacy', () {
+    bool selected(WidgetTester tester, String v) => tester
+        .widget<ChoiceChip>(find.descendant(of: byId('user-settings-privacy-$v'), matching: find.byType(ChoiceChip)))
+        .selected;
+
+    testWidgets('an old "contacts" shows as 비공개 and is saved as private', (tester) async {
+      final server = newServer()..profile['defaultPrivacyLevel'] = 'contacts';
+      await pumpApp(tester, server);
+      await openSettings(tester);
+      expect(selected(tester, 'private'), isTrue);
+      expect(selected(tester, 'public'), isFalse);
+
+      await fill(tester);
+      await tapId(tester, 'user-settings-submit');
+      expect(server.bodies['PATCH /users/u1'], containsPair('defaultPrivacyLevel', 'private'));
+    });
+
+    testWidgets('changing it makes the old result go away', (tester) async {
+      await pumpApp(tester, newServer());
+      await openSettings(tester);
+      await fill(tester);
+      await saveAndLookAtToast(tester);
+      expect(find.text('설정 저장 성공'), findsOneWidget);
+      await tapId(tester, 'user-settings-privacy-private');
+      expect(find.text('설정 저장 성공'), findsNothing);
+    });
+  });
+
+  group('the result', () {
+    testWidgets('saved, but the shown name could not be read again', (tester) async {
+      final server = newServer();
+      await pumpApp(tester, server);
+      await openSettings(tester);
+      await fill(tester);
+      server.htmlError.add('GET /checkAuth');
+      await tapId(tester, 'user-settings-submit');
+      expect(find.text('설정 저장 성공. 표시 정보는 새로 불러오지 못했습니다.'), findsOneWidget);
+    });
+
+    testWidgets('a field the server refuses is named', (tester) async {
+      final server = newServer()..updateUserFieldError = 'phoneNumber';
+      await pumpApp(tester, server);
+      await openSettings(tester);
+      await fill(tester);
+      await tapId(tester, 'user-settings-submit');
+      expect(find.text('설정 저장 실패: 전화번호가 올바르지 않습니다. (예: 010-1234-5678)'), findsOneWidget);
+    });
+
+    testWidgets('a long reason is shown whole on a narrow screen with big letters', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final server = newServer()..updateUserStatus = 500;
+      await pumpApp(tester, server, size: const Size(360, 2400));
+      await openSettings(tester);
+      await fill(tester);
+      await tapId(tester, 'user-settings-submit');
+      expect(tester.takeException(), isNull);
+      final text = tester.renderObject<RenderParagraph>(find.textContaining('설정 저장 실패'));
+      expect(tester.getSize(byId('user-settings-message')).height, greaterThanOrEqualTo(text.getMaxIntrinsicHeight(text.size.width) - 1));
+      expect(tester.getSize(byId('user-settings-message')).height, greaterThan(40)); // more than one line
+    });
+
+    testWidgets('성 comes before 이름 (like the web)', (tester) async {
+      await pumpApp(tester, newServer());
+      await openSettings(tester);
+      expect(tester.getTopLeft(byId('user-settings-lastName-input')).dy, lessThan(tester.getTopLeft(byId('user-settings-firstName-input')).dy));
     });
   });
 
@@ -285,15 +355,13 @@ void main() {
     // The server's rule (PHONE_NUMBER_PATTERN): digits, spaces, hyphens and
     // brackets, an optional leading "+", 7 to 20 characters, a digit at both ends.
     test('phone: the server rule', () {
-      for (final ok in ['010-1234-5678', '01012345678', '650-555-1212', '1234567', '+82 10-1234-5678', '02 (123) 4567', '+1 650 555 1212']) {
+      for (final ok in ['010-1234-5678', '01012345678', '650-555-1212', '1234567', '+82 10-1234-5678', '02 (123) 4567', '+1 650 555 1212', '(02) 123-4567', '(02)1234']) {
         expect(validatePhoneNumber(ok), isNull, reason: ok);
       }
       const bad = '전화번호가 올바르지 않습니다. (예: 010-1234-5678)';
-      for (final no in ['12', '123456', 'abc', '010-1234-567a', '-1234567', '1234567-', '++821012345678', '(02', '1' * 21, '(02) 123-4567']) {
+      for (final no in ['12', '123456', 'abc', '010-1234-567a', '-1234567', '1234567-', '++821012345678', '(02', '1' * 21, '(02', '()1234567', '(02) 123-', '(1' * 11]) {
         expect(validatePhoneNumber(no), bad, reason: no);
       }
-      // The server's own comment lists "(02) 123-4567", but its pattern needs a digit
-      // first, so it refuses a leading bracket. The app follows the pattern.
       expect(validatePhoneNumber(' 010-1234-5678 '), isNull);
       expect(validatePhoneNumber('abc', noun: '연락처'), '연락처가 올바르지 않습니다. (예: 010-1234-5678)');
       expect(validatePhoneNumber('', noun: '연락처'), '연락처를 입력하세요.');

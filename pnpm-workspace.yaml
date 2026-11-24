@@ -1,2 +1,15 @@
 packages:
   - "tests/*"
+
+# Appium's helper app must have a short path: adb on Windows cannot open a longer one
+nodeLinker: hoisted
+
+# Not needed here: these packages only download browsers or print notices when they are installed
+allowBuilds:
+  "@prisma/client": false
+  "@prisma/engines": false
+  appium: false
+  edgedriver: false
+  esbuild: false
+  geckodriver: false
+  prisma: false
