@@ -104,8 +104,8 @@ class _EmptyList extends ConsumerWidget {
     return LayoutBuilder(
       builder: (context, constraints) => SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        child: SizedBox(
-          height: constraints.maxHeight,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
           child: Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,

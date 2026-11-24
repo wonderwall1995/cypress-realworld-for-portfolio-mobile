@@ -1,11 +1,12 @@
 {
   "name": "cypress-realworld-for-personal-portfolio-mobile",
-  "version": "0.101.0",
+  "version": "0.102.0",
   "private": true,
   "license": "MIT",
   "scripts": {
     "app:get": "cd apps/mobile && flutter pub get",
     "app:analyze": "cd apps/mobile && flutter analyze",
+    "app:format": "cd apps/mobile && dart format",
     "app:test": "cd apps/mobile && flutter test",
     "app:run": "cd apps/mobile && flutter run --dart-define-from-file=../../.env",
     "device:start": "powershell -NoProfile -Command \"Start-Process -WindowStyle Hidden -FilePath \\\"$env:LOCALAPPDATA/Android/Sdk/emulator/emulator.exe\\\" -ArgumentList '-avd','pixel','-memory','4096'\" && adb start-server && adb wait-for-device && adb shell \"while [ -z \\\"$(getprop sys.boot_completed)\\\" ]; do sleep 2; done\"",
