@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../about/original_project_link.dart';
+import '../simulation/simulation_launcher.dart';
 import '../../core/api_client.dart';
 import '../../core/demo_notice.dart';
 import '../../core/form_check.dart';
@@ -51,7 +52,9 @@ class _SignInPageState extends ConsumerState<SignInPage> {
       _error = null;
     });
     try {
-      await ref.read(sessionProvider.notifier).signIn(
+      await ref
+          .read(sessionProvider.notifier)
+          .signIn(
             username: _username.text.trim(),
             password: _password.text,
             remember: _remember,
@@ -96,7 +99,10 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                       FormErrorBanner(id: 'signin-error', message: error),
                       const SizedBox(height: 16),
                     ],
-                    const DemoNotice(id: 'signin-demo-notice', text: signInDemoNotice),
+                    const DemoNotice(
+                      id: 'signin-demo-notice',
+                      text: signInDemoNotice,
+                    ),
                     const SizedBox(height: 16),
                     TestId(
                       'signin-username',
@@ -108,8 +114,9 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                         ),
                         textInputAction: TextInputAction.next,
                         autocorrect: false,
-                        validator: (v) =>
-                            (v == null || v.trim().isEmpty) ? '사용자 ID를 입력하세요.' : null,
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? '사용자 ID를 입력하세요.'
+                            : null,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -135,7 +142,8 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                       'signin-remember-me',
                       child: CheckboxListTile(
                         value: _remember,
-                        onChanged: (v) => setState(() => _remember = v ?? false),
+                        onChanged: (v) =>
+                            setState(() => _remember = v ?? false),
                         title: const Text('로그인 상태 유지'),
                         controlAffinity: ListTileControlAffinity.leading,
                         contentPadding: EdgeInsets.zero,
@@ -156,6 +164,17 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                       child: TextButton(
                         onPressed: _openSignUp,
                         child: const Text('계정이 없나요? 회원가입'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TestId(
+                      'signin-simulation',
+                      child: OutlinedButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : SimulationLauncher.maybeOf(context)?.open,
+                        icon: const Icon(Icons.play_circle_outline),
+                        label: const Text('시연'),
                       ),
                     ),
                   ],
